@@ -10,6 +10,7 @@ from social_protection.models import BenefitPlan
 
 
 class CreateBenefitPlanInputType(OpenIMISMutation.Input):
+    code = graphene.String(required=True)
     name = graphene.String(required=True, max_length=255)
     date_from = graphene.Date(required=True)
     date_to = graphene.Date(required=True)
@@ -17,6 +18,10 @@ class CreateBenefitPlanInputType(OpenIMISMutation.Input):
     ceiling_per_beneficiary = graphene.Decimal(max_digits=18, decimal_places=2, required=False)
     organization_id = graphene.Int(required=False)
     schema = graphene.String()
+
+    date_valid_from = graphene.Date(required=False)
+    date_valid_to = graphene.Date(required=False)
+    json_ext = graphene.types.json.JSONString(required=False)
 
 
 class UpdateBenefitPlanInputType(CreateBenefitPlanInputType):
