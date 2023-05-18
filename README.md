@@ -20,10 +20,10 @@ It is dedicated to be deployed as a module of [openimis-be_py](https://github.co
   - delete
 
 ## Configuration options (can be changed via core.ModuleConfiguration)
-* gql_benefit_plan_search_perms: required rights to call individual GraphQL Query (default: ["160001"])
-* gql_benefit_plan_create_perms: required rights to call createIndividual GraphQL Mutation (default: ["160002"])
-* gql_benefit_plan_update_perms: required rights to call updateIndividual GraphQL Mutation (default: ["160003"])
-* gql_benefit_plan_delete_perms: required rights to call deleteIndividual GraphQL Mutation (default: ["160004"])
+* gql_benefit_plan_search_perms: required rights to call benefitPlan GraphQL Query (default: ["160001"])
+* gql_benefit_plan_create_perms: required rights to call createBenefitPlan GraphQL Mutation (default: ["160002"])
+* gql_benefit_plan_update_perms: required rights to call updateBenefitPlan GraphQL Mutation (default: ["160003"])
+* gql_benefit_plan_delete_perms: required rights to call deleteBenefitPlan GraphQL Mutation (default: ["160004"])
 
 
 ## openIMIS Modules Dependencies
