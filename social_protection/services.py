@@ -43,14 +43,14 @@ class BenefitPlanService(BaseService):
 
 
 def check_unique_code(code, uuid=None):
-    instance = BenefitPlan.objects.get(code=code, is_deleted=False)
+    instance = BenefitPlan.objects.filter(code=code, is_deleted=False).first()
     if instance and instance.uuid != uuid:
         return [{"message": "BenefitPlan code %s already exists" % code}]
     return []
 
 
 def check_unique_name(name, uuid=None):
-    instance = BenefitPlan.objects.get(name=name, is_deleted=False)
+    instance = BenefitPlan.objects.filter(name=name, is_deleted=False).first()
     if instance and instance.uuid != uuid:
         return [{"message": "BenefitPlan name %s already exists" % name}]
     return []
