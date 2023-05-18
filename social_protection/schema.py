@@ -39,6 +39,7 @@ class Query:
                 SocialProtectionConfig.gql_benefit_plan_search_perms):
             raise PermissionError("Unauthorized")
 
+
 class Mutation(graphene.ObjectType):
     create_benefit_plan = CreateBenefitPlanMutation.field()
     update_benefit_plan = CreateBenefitPlanMutation.field()
