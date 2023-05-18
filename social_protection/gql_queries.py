@@ -12,7 +12,7 @@ class BenefitPlanGQLType(DjangoObjectType):
     class Meta:
         model = BenefitPlan
         interfaces = (graphene.relay.Node,)
-        filtered_fields = {
+        filter_fields = {
             "id": ["exact"],
             "code": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
             "name": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
@@ -20,7 +20,7 @@ class BenefitPlanGQLType(DjangoObjectType):
             "date_to": ["exact", "lt", "lte", "gt", "gte"],
             "max_beneficiaries": ["exact", "lt", "lte", "gt", "gte"],
             "schema": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
-            **prefix_filterset("policyholder__", PolicyHolderGQLType._meta.filter_fields),
+            **prefix_filterset("organization__", PolicyHolderGQLType._meta.filter_fields),
 
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
