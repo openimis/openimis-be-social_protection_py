@@ -41,6 +41,6 @@ class Query:
 
 
 class Mutation(graphene.ObjectType):
-    create_benefit_plan = CreateBenefitPlanMutation.field()
-    update_benefit_plan = CreateBenefitPlanMutation.field()
-    delete_benefit_plan = CreateBenefitPlanMutation.field()
+    create_benefit_plan = CreateBenefitPlanMutation.Field()
+    update_benefit_plan = CreateBenefitPlanMutation.Field()
+    delete_benefit_plan = CreateBenefitPlanMutation.Field()
