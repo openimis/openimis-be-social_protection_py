@@ -15,7 +15,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('policyholder', '0017_auto_20230126_0903'),
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('core', '0018_auto_20230318_1551'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL)
     ]
 
     operations = [

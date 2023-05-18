@@ -17,11 +17,19 @@ def _add_right_for_role(role, right_id):
     RoleRight.objects.create(role=role, right_id=right_id, audit_user_id=1)
 
 
+def remove_rights(apps, schema_editor):
+    RoleRight.objects.filter(
+        role__is_system=imis_administrator_system,
+        right_id__in=benefit_plan_rights,
+        validity_to__isnull=True
+    ).delete()
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ('social_protection', '0001_initial')
     ]
 
     operations = [
-        migrations.RunPython(add_rights),
+        migrations.RunPython(add_rights, remove_rights),
     ]
