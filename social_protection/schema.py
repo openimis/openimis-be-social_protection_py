@@ -5,7 +5,8 @@ from django.db.models import Q
 from core.schema import OrderedDjangoFilterConnectionField
 from core.utils import append_validity_filter
 from social_protection.apps import SocialProtectionConfig
-from social_protection.gql_mutations import CreateBenefitPlanMutation
+from social_protection.gql_mutations import CreateBenefitPlanMutation, UpdateBenefitPlanMutation, \
+    DeleteBenefitPlanMutation
 from social_protection.gql_queries import BenefitPlanGQLType
 from social_protection.models import BenefitPlan
 import graphene_django_optimizer as gql_optimizer
@@ -42,5 +43,5 @@ class Query:
 
 class Mutation(graphene.ObjectType):
     create_benefit_plan = CreateBenefitPlanMutation.Field()
-    update_benefit_plan = CreateBenefitPlanMutation.Field()
-    delete_benefit_plan = CreateBenefitPlanMutation.Field()
+    update_benefit_plan = UpdateBenefitPlanMutation.Field()
+    delete_benefit_plan = DeleteBenefitPlanMutation.Field()
