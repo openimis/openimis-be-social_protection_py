@@ -4,7 +4,7 @@ from policyholder.models import PolicyHolder
 
 
 class BenefitPlan(core_models.HistoryBusinessModel):
-    code = models.CharField(db_column='Code', max_length=50, null=False)
+    code = models.CharField(db_column='Code', max_length=8, null=False)
     name = models.CharField(db_column='NameBF', max_length=255, null=False)
     date_from = models.DateTimeField(db_column="DateFrom")
     date_to = models.DateTimeField(db_column="DateTo")
