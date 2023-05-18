@@ -62,9 +62,11 @@ class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
 
     @classmethod
     def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
         if type(user) is AnonymousUser or not user.has_perms(
                 SocialProtectionConfig.gql_benefit_plan_update_perms):
             raise ValidationError("mutation.authentication_required")
+
 
     @classmethod
     def _mutate(cls, user, **data):
