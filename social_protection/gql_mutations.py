@@ -67,7 +67,6 @@ class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
                 SocialProtectionConfig.gql_benefit_plan_update_perms):
             raise ValidationError("mutation.authentication_required")
 
-
     @classmethod
     def _mutate(cls, user, **data):
         if "date_valid_to" not in data:
