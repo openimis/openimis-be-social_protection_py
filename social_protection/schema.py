@@ -23,8 +23,7 @@ class Query:
     )
 
     def resolve_benefit_plan(self, info, **kwargs):
-        filters = []
-        filters += append_validity_filter(**kwargs)
+        filters = append_validity_filter(**kwargs)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
