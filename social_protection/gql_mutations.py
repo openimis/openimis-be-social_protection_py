@@ -18,7 +18,7 @@ class CreateBenefitPlanInputType(OpenIMISMutation.Input):
     date_to = graphene.Date(required=True)
     max_beneficiaries = graphene.Int(default_value=0)
     ceiling_per_beneficiary = graphene.Decimal(max_digits=18, decimal_places=2, required=False)
-    organization_id = graphene.UUID(required=False)
+    holder_id = graphene.UUID(required=False)
     schema = graphene.String()
 
     date_valid_from = graphene.Date(required=False)

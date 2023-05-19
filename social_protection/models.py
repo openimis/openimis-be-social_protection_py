@@ -15,5 +15,5 @@ class BenefitPlan(core_models.HistoryBusinessModel):
                                                   blank=True,
                                                   null=True,
                                                   )
-    organization = models.ForeignKey(PolicyHolder, models.DO_NOTHING, db_column='Organization', blank=True, null=True)
+    holder = models.ForeignKey(PolicyHolder, models.DO_NOTHING, db_column='Holder', blank=True, null=True)
     schema = models.TextField(db_column="Schema", null=True, blank=True)
