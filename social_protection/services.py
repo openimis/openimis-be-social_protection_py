@@ -9,6 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 class BenefitPlanService(BaseService):
+    OBJECT_TYPE = BenefitPlan
+
+    def __init__(self, user, validation_class=BenefitPlanValidation):
+        super().__init__(user, validation_class)
+
     @register_service_signal('benefit_plan_service.create')
     def create(self, obj_data):
         return super().create(obj_data)
@@ -20,8 +25,3 @@ class BenefitPlanService(BaseService):
     @register_service_signal('benefit_plan_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
-
-    OBJECT_TYPE = BenefitPlan
-
-    def __init__(self, user, validation_class=BenefitPlanValidation):
-        super().__init__(user, validation_class)
