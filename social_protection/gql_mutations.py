@@ -14,15 +14,13 @@ from social_protection.services import BenefitPlanService
 class CreateBenefitPlanInputType(OpenIMISMutation.Input):
     code = graphene.String(required=True)
     name = graphene.String(required=True, max_length=255)
-    date_from = graphene.Date(required=True)
-    date_to = graphene.Date(required=True)
     max_beneficiaries = graphene.Int(default_value=0)
     ceiling_per_beneficiary = graphene.Decimal(max_digits=18, decimal_places=2, required=False)
     holder_id = graphene.UUID(required=False)
     schema = graphene.String()
 
-    date_valid_from = graphene.Date(required=False)
-    date_valid_to = graphene.Date(required=False)
+    date_valid_from = graphene.Date(required=True)
+    date_valid_to = graphene.Date(required=True)
     json_ext = graphene.types.json.JSONString(required=False)
 
 

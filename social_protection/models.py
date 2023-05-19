@@ -6,8 +6,6 @@ from policyholder.models import PolicyHolder
 class BenefitPlan(core_models.HistoryBusinessModel):
     code = models.CharField(db_column='Code', max_length=8, null=False)
     name = models.CharField(db_column='NameBF', max_length=255, null=False)
-    date_from = models.DateTimeField(db_column="DateFrom")
-    date_to = models.DateTimeField(db_column="DateTo")
     max_beneficiaries = models.SmallIntegerField(db_column="MaxNoBeneficiaries")
     ceiling_per_beneficiary = models.DecimalField(db_column="BeneficiaryCeiling",
                                                   max_digits=18,
