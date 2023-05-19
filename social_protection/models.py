@@ -17,7 +17,3 @@ class BenefitPlan(core_models.HistoryBusinessModel):
                                                   )
     organization = models.ForeignKey(PolicyHolder, models.DO_NOTHING, db_column='Organization', blank=True, null=True)
     schema = models.TextField(db_column="Schema", null=True, blank=True)
-
-    class Meta:
-        managed = True
-        db_table = 'tblBenefitPlan'

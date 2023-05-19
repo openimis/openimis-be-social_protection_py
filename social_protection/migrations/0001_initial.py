@@ -79,10 +79,6 @@ class Migration(migrations.Migration):
                 ('user_created', models.ForeignKey(db_column='UserCreatedUUID', on_delete=django.db.models.deletion.DO_NOTHING, related_name='benefitplan_user_created', to=settings.AUTH_USER_MODEL)),
                 ('user_updated', models.ForeignKey(db_column='UserUpdatedUUID', on_delete=django.db.models.deletion.DO_NOTHING, related_name='benefitplan_user_updated', to=settings.AUTH_USER_MODEL)),
             ],
-            options={
-                'db_table': 'tblBenefitPlan',
-                'managed': True,
-            },
             bases=(dirtyfields.dirtyfields.DirtyFieldsMixin, models.Model),
         ),
     ]
