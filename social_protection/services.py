@@ -6,7 +6,10 @@ from social_protection.models import (
     BenefitPlan,
     Beneficiary
 )
-from social_protection.validation import BenefitPlanValidation
+from social_protection.validation import (
+    BeneficiaryValidation,
+    BenefitPlanValidation
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +36,7 @@ class BenefitPlanService(BaseService):
 class BeneficiaryService(BaseService):
     OBJECT_TYPE = Beneficiary
 
-    def __init__(self, user, validation_class=None):
+    def __init__(self, user, validation_class=BeneficiaryValidation):
         super().__init__(user, validation_class)
 
     @register_service_signal('beneficiary_service.create')

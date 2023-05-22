@@ -8,8 +8,14 @@ from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
 from core.utils import append_validity_filter
 from social_protection.apps import SocialProtectionConfig
-from social_protection.gql_mutations import CreateBenefitPlanMutation, UpdateBenefitPlanMutation, \
-    DeleteBenefitPlanMutation
+from social_protection.gql_mutations import (
+    CreateBenefitPlanMutation,
+    UpdateBenefitPlanMutation,
+    DeleteBenefitPlanMutation,
+    CreateBeneficiaryMutation,
+    UpdateBeneficiaryMutation,
+    DeleteBeneficiaryMutation
+)
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
     BeneficiaryGQLType
@@ -106,3 +112,7 @@ class Mutation(graphene.ObjectType):
     create_benefit_plan = CreateBenefitPlanMutation.Field()
     update_benefit_plan = UpdateBenefitPlanMutation.Field()
     delete_benefit_plan = DeleteBenefitPlanMutation.Field()
+
+    create_beneficiary = CreateBeneficiaryMutation.Field()
+    update_beneficiary = UpdateBeneficiaryMutation.Field()
+    delete_beneficiary = DeleteBeneficiaryMutation.Field()

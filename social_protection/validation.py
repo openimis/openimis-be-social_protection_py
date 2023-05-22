@@ -3,7 +3,7 @@ import jsonschema
 from django.core.exceptions import ValidationError
 
 from core.validation import BaseModelValidation
-from social_protection.models import BenefitPlan
+from social_protection.models import Beneficiary, BenefitPlan
 
 
 class BenefitPlanValidation(BaseModelValidation):
@@ -67,3 +67,7 @@ def is_valid_json_schema(schema):
         return []
     except jsonschema.exceptions.SchemaError:
         return [{"message": "BenefitPlan schema is not valid"}]
+
+
+class BeneficiaryValidation(BaseModelValidation):
+    OBJECT_TYPE = Beneficiary
