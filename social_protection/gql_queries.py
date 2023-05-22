@@ -28,6 +28,7 @@ class BenefitPlanGQLType(DjangoObjectType):
             "version": ["exact"],
         }
         connection_class = ExtendedConnection
+<<<<<<< HEAD
 
 
 class BeneficiaryGQLType(DjangoObjectType):
@@ -49,3 +50,5 @@ class BeneficiaryGQLType(DjangoObjectType):
             "version": ["exact"],
         }
         connection_class = ExtendedConnection
+=======
+>>>>>>> 16e5bef8f77612b91937f476ab023fceeb6d0511

@@ -24,7 +24,7 @@ from social_protection.models import (
     BenefitPlan,
     Beneficiary
 )
-from social_protection.validation import check_bf_unique_code, check_bf_unique_name
+from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name
 import graphene_django_optimizer as gql_optimizer
 
 
@@ -59,7 +59,7 @@ class Query:
     def resolve_bf_code_validity(self, info, **kwargs):
         if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
             raise PermissionDenied(_("unauthorized"))
-        errors = check_bf_unique_code(kwargs['bf_code'])
+        errors = validate_bf_unique_code(kwargs['bf_code'])
         if errors:
             return ValidationMessageGQLType(False, error_message=errors[0]['message'])
         else:
@@ -68,7 +68,7 @@ class Query:
     def resolve_bf_name_validity(self, info, **kwargs):
         if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
             raise PermissionDenied(_("unauthorized"))
-        errors = check_bf_unique_name(kwargs['bf_code'])
+        errors = validate_bf_unique_name(kwargs['bf_code'])
         if errors:
             return ValidationMessageGQLType(False, error_message=errors[0]['message'])
         else:
