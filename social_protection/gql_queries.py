@@ -19,7 +19,6 @@ class BenefitPlanGQLType(DjangoObjectType):
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
             "max_beneficiaries": ["exact", "lt", "lte", "gt", "gte"],
-            "beneficiary_data_schema": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
             **prefix_filterset("holder__", PolicyHolderGQLType._meta.filter_fields),
 
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
