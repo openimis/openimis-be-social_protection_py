@@ -150,7 +150,7 @@ class CreateBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
             data.pop('client_mutation_label')
 
         service = BeneficiaryService(user)
-        d = service.create(data)
+        service.create(data)
 
     class Input(CreateBeneficiaryInputType):
         pass
