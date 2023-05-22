@@ -81,3 +81,17 @@ service_update_payload = {
     "dateValidTo": "2023-12-31",
     "jsonExt": "{\"key\":\"updated_value\"}"
 }
+
+service_beneficiary_add_payload = {
+    "status": "Potential",
+    "dateValidFrom": "2023-01-01",
+    "dateValidTo": "2023-12-31",
+    "jsonExt": "{\"key\":\"value\"}"
+}
+
+service_beneficiary_update_payload = {
+    "status": "Active",
+    "dateValidFrom": "2023-01-01",
+    "dateValidTo": "2023-12-31",
+    "jsonExt": "{\"key\":\"value\"}"
+}
