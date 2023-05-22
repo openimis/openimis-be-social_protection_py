@@ -46,7 +46,7 @@ class BeneficiaryServiceTest(TestCase):
         self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
         query = self.query_all.filter(uuid=uuid)
         self.assertEqual(query.count(), 1)
-        self.assertEqual(query.first().first_name, update_payload.get('first_name'))
+        self.assertEqual(query.first().status, update_payload.get('status'))
 
     def test_delete_benefit_plan(self):
         result = self.service.create(service_beneficiary_add_payload)
