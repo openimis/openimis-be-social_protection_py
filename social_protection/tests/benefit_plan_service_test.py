@@ -7,7 +7,8 @@ from social_protection.services import BenefitPlanService
 from social_protection.tests.data import (
     service_add_payload,
     service_add_payload_no_ext,
-    service_update_payload, service_add_payload_same_code, service_add_payload_same_name
+    service_update_payload, service_add_payload_same_code, service_add_payload_same_name,
+    service_add_payload_invalid_schema
 )
 from social_protection.tests.helpers import LogInHelper
 
@@ -84,3 +85,7 @@ class BenefitPlanServiceTest(TestCase):
         name = first_bf['name']
         name_query = self.query_all.filter(name=name)
         self.assertEqual(name.count(), 1)
+
+    def test_add_invalid_schema_benefit_plan(self):
+        result = self.service.create(service_add_payload_invalid_schema)
+        self.assertFalse(result.get('success', True))

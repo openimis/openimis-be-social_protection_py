@@ -1,3 +1,5 @@
+import jsonschema
+
 from django.core.exceptions import ValidationError
 
 from core.validation import BaseModelValidation
@@ -10,22 +12,34 @@ class BenefitPlanValidation(BaseModelValidation):
     @classmethod
     def validate_create(cls, user, **data):
         incoming_code = data.get('code')
-        if check_bf_unique_code(incoming_code):
-            raise ValidationError(("Benefit code %s already exists" % incoming_code))
+        code_error = check_bf_unique_code(incoming_code)
+        if code_error:
+            raise ValidationError(code_error[0]['message'])
         incoming_name = data.get('name')
-        if check_bf_unique_name(incoming_name):
-            raise ValidationError(("Benefit name %s already exists" % incoming_name))
+        name_error = check_bf_unique_name(incoming_name)
+        if name_error:
+            raise ValidationError(name_error[0]['message'])
+        incoming_schema = data.get('beneficiary_data_schema')
+        schema_error = is_valid_json_schema(incoming_schema)
+        if schema_error:
+            raise ValidationError(schema_error[0]['message'])
         super().validate_create(user, **data)
 
     @classmethod
     def validate_update(cls, user, **data):
         uuid = data.get('id')
         incoming_code = data.get('code')
-        if check_bf_unique_code(incoming_code, uuid):
-            raise ValidationError(("Benefit code %s already exists" % incoming_code))
+        code_error = check_bf_unique_code(incoming_code, uuid)
+        if code_error:
+            raise ValidationError(code_error[0]['message'])
         incoming_name = data.get('name')
-        if check_bf_unique_name(incoming_name, uuid):
-            raise ValidationError(("Benefit name %s already exists" % incoming_name))
+        name_error = check_bf_unique_name(incoming_name, uuid)
+        if name_error:
+            raise ValidationError(name_error[0]['message'])
+        incoming_schema = data.get('beneficiary_data_schema')
+        schema_error = is_valid_json_schema(incoming_schema)
+        if schema_error:
+            raise ValidationError(schema_error[0]['message'])
         super().validate_update(user, **data)
 
     @classmethod
@@ -45,3 +59,11 @@ def check_bf_unique_name(name, uuid=None):
     if instance and instance.uuid != uuid:
         return [{"message": "BenefitPlan name %s already exists" % name}]
     return []
+
+
+def is_valid_json_schema(schema):
+    try:
+        jsonschema.Draft7Validator.check_schema(schema)
+        return []
+    except jsonschema.exceptions.SchemaError:
+        return [{"message": "BenefitPlan schema is not valid"}]

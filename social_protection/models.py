@@ -13,4 +13,4 @@ class BenefitPlan(core_models.HistoryBusinessModel):
                                                   null=True,
                                                   )
     holder = models.ForeignKey(PolicyHolder, models.DO_NOTHING, blank=True, null=True)
-    beneficiary_data_schema = models.TextField(null=True, blank=True)
+    beneficiary_data_schema = models.JSONField(null=True, blank=True)
