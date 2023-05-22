@@ -8,6 +8,7 @@ from individual.tests.data import service_add_payload as service_add_individual_
 from social_protection.models import Beneficiary, BenefitPlan
 from social_protection.services import BeneficiaryService
 from social_protection.tests.data import (
+    service_add_payload,
     service_beneficiary_add_payload,
     service_beneficiary_update_payload
 )
@@ -68,7 +69,7 @@ class BeneficiaryServiceTest(TestCase):
     @classmethod
     def __create_benefit_plan(cls):
         object_data = {
-            **service_beneficiary_add_payload
+            **service_add_payload
         }
 
         benefit_plan = BenefitPlan(**object_data)
