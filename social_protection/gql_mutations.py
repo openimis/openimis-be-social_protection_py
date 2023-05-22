@@ -28,6 +28,20 @@ class UpdateBenefitPlanInputType(CreateBenefitPlanInputType):
     id = graphene.UUID(required=True)
 
 
+class CreateBeneficiaryInputType(OpenIMISMutation.Input):
+    status = graphene.String(required=True)
+    individual_id = graphene.UUID(required=False)
+    benefit_plan_id = graphene.UUID(required=False)
+
+    date_valid_from = graphene.Date(required=True)
+    date_valid_to = graphene.Date(required=True)
+    json_ext = graphene.types.json.JSONString(required=False)
+
+
+class UpdateBeneficiaryInputType(CreateBeneficiaryInputType):
+    id = graphene.UUID(required=True)
+
+
 class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
     _mutation_class = "CreateBenefitPlanMutation"
     _mutation_module = "social_protection"
