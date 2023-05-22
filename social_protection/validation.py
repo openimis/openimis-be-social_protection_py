@@ -1,8 +1,8 @@
 import jsonschema
 
 from django.core.exceptions import ValidationError
+from django.utils.translation import gettext as _
 
-from gettext import gettext as _
 from core.validation import BaseModelValidation
 from social_protection.models import BenefitPlan
 
