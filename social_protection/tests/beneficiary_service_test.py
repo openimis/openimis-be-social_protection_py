@@ -50,7 +50,7 @@ class BeneficiaryServiceTest(TestCase):
         update_payload['id'] = uuid
         update_payload['individual_id'] = self.individual.id
         update_payload['benefit_plan_id'] = self.benefit_plan.id
-        result = self.service.update(service_beneficiary_update_payload)
+        result = self.service.update(update_payload)
         self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
         query = self.query_all.filter(uuid=uuid)
         self.assertEqual(query.count(), 1)
