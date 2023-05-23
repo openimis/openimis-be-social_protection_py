@@ -40,14 +40,17 @@ service_add_payload_invalid_schema = {
     "max_beneficiaries": 0,
     "ceiling_per_beneficiary": "0.00",
     "beneficiary_data_schema": {
-        "$schema": "https://json-schema.org/draft/2019-09/schema",
         "type": "object",
         "properties": {
-            "invalid_property": {
-                "type": "string"
+            "name": {
+                "type": "string",
+                "maxLength": "abc"
+            },
+            "age": {
+                "type": "integer",
+                "maximum": -10
             }
-        },
-        "required": ["invalid_property"]
+        }
     },
     "date_valid_from": "2023-01-01",
     "date_valid_to": "2023-12-31",
