@@ -68,7 +68,7 @@ class Query:
     def resolve_bf_name_validity(self, info, **kwargs):
         if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
             raise PermissionDenied(_("unauthorized"))
-        errors = validate_bf_unique_name(kwargs['bf_code'])
+        errors = validate_bf_unique_name(kwargs['bf_name'])
         if errors:
             return ValidationMessageGQLType(False, error_message=errors[0]['message'])
         else:
