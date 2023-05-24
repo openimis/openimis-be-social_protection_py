@@ -31,13 +31,18 @@ class BenefitPlanValidation(BaseModelValidation):
 
 
 def validate_benefit_plan(data, uuid=None):
-    return [
+    validations = [
         *validate_not_empty_field(data.get("code"), "code"),
         *validate_bf_unique_code(data.get('code'), uuid),
         *validate_not_empty_field(data.get("name"), "name"),
-        *validate_bf_unique_name(data.get('name'), uuid),
-        *validate_json_schema(data.get('beneficiary_data_schema'))
+        *validate_bf_unique_name(data.get('name'), uuid)
     ]
+
+    beneficiary_data_schema = data.get('beneficiary_data_schema')
+    if beneficiary_data_schema:
+        validations.extend(validate_json_schema(beneficiary_data_schema))
+
+    return validations
 
 
 def validate_bf_unique_code(code, uuid=None):
