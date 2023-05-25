@@ -67,7 +67,10 @@ class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
             data.pop('client_mutation_label')
 
         service = BenefitPlanService(user)
-        service.create(data)
+        res = service.create(data)
+        if not res['success']:
+            return res
+        return None
 
     class Input(CreateBenefitPlanInputType):
         pass
@@ -95,7 +98,10 @@ class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
             data.pop('client_mutation_label')
 
         service = BenefitPlanService(user)
-        service.update(data)
+        res = service.update(data)
+        if not res['success']:
+            return res
+        return None
 
     class Input(UpdateBenefitPlanInputType):
         pass
