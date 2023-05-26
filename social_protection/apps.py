@@ -5,6 +5,10 @@ DEFAULT_CONFIG = {
     "gql_benefit_plan_create_perms": ["160002"],
     "gql_benefit_plan_update_perms": ["160003"],
     "gql_benefit_plan_delete_perms": ["160004"],
+    "gql_beneficiary_search_perms": ["170001"],
+    "gql_beneficiary_create_perms": ["170002"],
+    "gql_beneficiary_update_perms": ["170003"],
+    "gql_beneficiary_delete_perms": ["170004"],
 }
 
 
@@ -16,6 +20,10 @@ class SocialProtectionConfig(AppConfig):
     gql_benefit_plan_create_perms = None
     gql_benefit_plan_update_perms = None
     gql_benefit_plan_delete_perms = None
+    gql_beneficiary_search_perms = None
+    gql_beneficiary_create_perms = None
+    gql_beneficiary_update_perms = None
+    gql_beneficiary_delete_perms = None
 
     def ready(self):
         from core.models import ModuleConfiguration

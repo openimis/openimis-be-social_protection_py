@@ -1,83 +1,93 @@
 service_add_payload = {
     "code": "example",
     "name": "example_name",
-    "maxBeneficiaries": 0,
-    "ceilingPerBeneficiary": "0.00",
+    "max_beneficiaries": 0,
+    "ceiling_per_beneficiary": "0.00",
     "beneficiary_data_schema": {
         "$schema": "https://json-schema.org/draft/2019-09/schema"
     },
-    "dateValidFrom": "2023-01-01",
-    "dateValidTo": "2023-12-31",
-    "jsonExt": "{\"key\":\"value\"}"
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
 }
 
 service_add_payload_same_code = {
     "code": "example",
     "name": "random",
-    "maxBeneficiaries": 0,
-    "ceilingPerBeneficiary": "0.00",
+    "max_beneficiaries": 0,
+    "ceiling_per_beneficiary": "0.00",
     "beneficiary_data_schema": {
         "$schema": "https://json-schema.org/draft/2019-09/schema"
     },
-    "dateValidFrom": "2023-01-01",
-    "dateValidTo": "2023-12-31",
-    "jsonExt": "{\"key\":\"value\"}"
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
 }
 
 service_add_payload_same_name = {
     "code": "random",
     "name": "example_name",
-    "maxBeneficiaries": 0,
-    "ceilingPerBeneficiary": "0.00",
+    "max_beneficiaries": 0,
+    "ceiling_per_beneficiary": "0.00",
     "beneficiary_data_schema": {
         "$schema": "https://json-schema.org/draft/2019-09/schema"
     },
-    "dateValidFrom": "2023-01-01",
-    "dateValidTo": "2023-12-31",
-    "jsonExt": "{\"key\":\"value\"}"
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
 }
 
 service_add_payload_invalid_schema = {
     "code": "random",
     "name": "example_name",
-    "maxBeneficiaries": 0,
-    "ceilingPerBeneficiary": "0.00",
+    "max_beneficiaries": 0,
+    "ceiling_per_beneficiary": "0.00",
     "beneficiary_data_schema": {
-        "$schema": "https://json-schema.org/draft/2019-09/schema",
         "type": "object",
         "properties": {
-            "invalid_property": {
-                "type": "string"
+            "name": {
+                "type": "string",
+                "maxLength": "abc"
+            },
+            "age": {
+                "type": "integer",
+                "maximum": -10
             }
-        },
-        "required": ["invalid_property"]
+        }
     },
-    "dateValidFrom": "2023-01-01",
-    "dateValidTo": "2023-12-31",
-    "jsonExt": "{\"key\":\"value\"}"
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
 }
 
 service_add_payload_no_ext = {
     "code": "example",
     "name": "example_name",
-    "maxBeneficiaries": 0,
-    "ceilingPerBeneficiary": "0.00",
+    "max_beneficiaries": 0,
+    "ceiling_per_beneficiary": "0.00",
     "beneficiary_data_schema": {
         "$schema": "https://json-schema.org/draft/2019-09/schema"
     },
-    "dateValidFrom": "2023-01-01",
-    "dateValidTo": "2023-12-31",
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
 }
 
 service_update_payload = {
     "code": "update",
     "name": "example_update",
-    "maxBeneficiaries": 0,
-    "ceilingPerBeneficiary": "0.00",
+    "max_beneficiaries": 0,
+    "ceiling_per_beneficiaryd": "0.00",
     "beneficiary_data_schema": {
         "$schema": "https://json-schema.org/draft/2019-09/schema"
     },
-    "dateValidFrom": "2023-01-01",
-    "dateValidTo": "2023-12-31",
-    "jsonExt": "{\"key\":\"updated_value\"}"
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
+}
+
+service_beneficiary_add_payload = {
+    "status": "Potential",
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
+}
+
+service_beneficiary_update_payload = {
+    "status": "Active",
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
 }

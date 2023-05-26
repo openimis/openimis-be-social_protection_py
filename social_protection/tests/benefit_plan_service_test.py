@@ -50,7 +50,7 @@ class BenefitPlanServiceTest(TestCase):
         self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
         query = self.query_all.filter(uuid=uuid)
         self.assertEqual(query.count(), 1)
-        self.assertEqual(query.first().first_name, update_payload.get('first_name'))
+        self.assertEqual(query.first().name, update_payload.get('name'))
 
     def test_delete_benefit_plan(self):
         result = self.service.create(service_add_payload)
@@ -70,7 +70,7 @@ class BenefitPlanServiceTest(TestCase):
         self.assertEqual(query.count(), 1)
         second_bf = self.service.create(service_add_payload_same_code)
         self.assertFalse(second_bf.get('success', True))
-        code = first_bf['code']
+        code = first_bf['data']['code']
         code_query = self.query_all.filter(code=code)
         self.assertEqual(code_query.count(), 1)
 
@@ -82,9 +82,9 @@ class BenefitPlanServiceTest(TestCase):
         self.assertEqual(query.count(), 1)
         second_bf = self.service.create(service_add_payload_same_name)
         self.assertFalse(second_bf.get('success', True))
-        name = first_bf['name']
+        name = first_bf['data']['name']
         name_query = self.query_all.filter(name=name)
-        self.assertEqual(name.count(), 1)
+        self.assertEqual(name_query.count(), 1)
 
     def test_add_invalid_schema_benefit_plan(self):
         result = self.service.create(service_add_payload_invalid_schema)

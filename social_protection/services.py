@@ -2,8 +2,14 @@ import logging
 
 from core.services import BaseService
 from core.signals import register_service_signal
-from social_protection.models import BenefitPlan
-from social_protection.validation import BenefitPlanValidation
+from social_protection.models import (
+    BenefitPlan,
+    Beneficiary
+)
+from social_protection.validation import (
+    BeneficiaryValidation,
+    BenefitPlanValidation
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,5 +29,24 @@ class BenefitPlanService(BaseService):
         return super().update(obj_data)
 
     @register_service_signal('benefit_plan_service.delete')
+    def delete(self, obj_data):
+        return super().delete(obj_data)
+
+
+class BeneficiaryService(BaseService):
+    OBJECT_TYPE = Beneficiary
+
+    def __init__(self, user, validation_class=BeneficiaryValidation):
+        super().__init__(user, validation_class)
+
+    @register_service_signal('beneficiary_service.create')
+    def create(self, obj_data):
+        return super().create(obj_data)
+
+    @register_service_signal('beneficiary_service.update')
+    def update(self, obj_data):
+        return super().update(obj_data)
+
+    @register_service_signal('beneficiary_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
