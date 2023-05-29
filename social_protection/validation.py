@@ -1,3 +1,5 @@
+import json
+
 import jsonschema
 
 from django.core.exceptions import ValidationError
@@ -65,11 +67,17 @@ def validate_bf_unique_name(name, uuid=None):
 
 def validate_json_schema(schema):
     try:
+        if not isinstance(schema, dict):
+            schema = json.loads(schema)
         jsonschema.Draft7Validator.check_schema(schema)
         return []
-    except jsonschema.exceptions.SchemaError as e:
+    except jsonschema.exceptions.SchemaError as schema_error:
         return [{"message": _("social_protection.validation.benefit_plan.invalid_schema" % {
-            'error': e
+            'error': str(schema_error)
+        })}]
+    except ValueError as json_error:
+        return [{"message": _("social_protection.validation.benefit_plan.invalid_json" % {
+            'error': str(json_error)
         })}]
 
 
