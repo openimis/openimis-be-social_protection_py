@@ -24,7 +24,7 @@ from social_protection.models import (
     BenefitPlan,
     Beneficiary
 )
-from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name
+from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name, validate_json_schema
 import graphene_django_optimizer as gql_optimizer
 
 
@@ -55,6 +55,11 @@ class Query:
         bf_name=graphene.String(required=True),
         description="Checks that the specified Benefit Plan name is valid"
     )
+    bf_schema_validity = graphene.Field(
+        ValidationMessageGQLType,
+        bf_schema=graphene.String(required=True),
+        description="Checks that the specified Benefit Plan schema is valid"
+    )
 
     def resolve_bf_code_validity(self, info, **kwargs):
         if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
@@ -69,6 +74,15 @@ class Query:
         if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
             raise PermissionDenied(_("unauthorized"))
         errors = validate_bf_unique_name(kwargs['bf_name'])
+        if errors:
+            return ValidationMessageGQLType(False, error_message=errors[0]['message'])
+        else:
+            return ValidationMessageGQLType(True)
+
+    def resolve_bf_schema_validity(self, info, **kwargs):
+        if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
+            raise PermissionDenied(_("unauthorized"))
+        errors = validate_json_schema(kwargs['bf_schema'])
         if errors:
             return ValidationMessageGQLType(False, error_message=errors[0]['message'])
         else:
