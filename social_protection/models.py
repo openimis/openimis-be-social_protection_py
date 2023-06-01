@@ -32,11 +32,10 @@ class Beneficiary(core_models.HistoryBusinessModel):
 
 
 class Group(core_models.HistoryBusinessModel):
-    individuals = models.ManyToManyField(Individual, through='GroupIndividual')
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     status = models.CharField(max_length=100, choices=StatusChoices.choices, null=False)
 
 
 class GroupIndividual(core_models.HistoryBusinessModel):
-    group = models.ForeignKey(Group, models.DO_NOTHING, null=False)
-    individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
+    group = models.ForeignKey(Group, models.DO_NOTHING)
+    individual = models.ForeignKey(Individual, models.DO_NOTHING)

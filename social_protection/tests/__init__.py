@@ -1,2 +1,4 @@
 from .beneficiary_service_test import BeneficiaryServiceTest
 from .benefit_plan_service_test import BenefitPlanServiceTest
+from .group_service_test import GroupServiceTest
+from .group_individual_service_test import GroupIndividualServiceTest

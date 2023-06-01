@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 from core.validation import BaseModelValidation
-from social_protection.models import Beneficiary, BenefitPlan
+from social_protection.models import Beneficiary, BenefitPlan, Group, GroupIndividual
 
 
 class BenefitPlanValidation(BaseModelValidation):
@@ -88,5 +88,13 @@ def validate_not_empty_field(string, field):
         }}]
     return []
 
+
 class BeneficiaryValidation(BaseModelValidation):
     OBJECT_TYPE = Beneficiary
+
+
+class GroupValidation(BaseModelValidation):
+    OBJECT_TYPE = Group
+
+class GroupIndividualValidation(BaseModelValidation):
+    OBJECT_TYPE = GroupIndividual

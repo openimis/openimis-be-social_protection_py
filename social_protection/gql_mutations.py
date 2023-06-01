@@ -9,11 +9,11 @@ from core.schema import OpenIMISMutation
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary
+    Beneficiary, Group, GroupIndividual
 )
 from social_protection.services import (
     BenefitPlanService,
-    BeneficiaryService
+    BeneficiaryService, GroupService, GroupIndividualService
 )
 
 
@@ -45,6 +45,32 @@ class CreateBeneficiaryInputType(OpenIMISMutation.Input):
 
 
 class UpdateBeneficiaryInputType(CreateBeneficiaryInputType):
+    id = graphene.UUID(required=True)
+
+
+class CreateGroupInputType(OpenIMISMutation.Input):
+    status = graphene.String(required=True)
+    benefit_plan_id = graphene.UUID(required=False)
+
+    date_valid_from = graphene.Date(required=False)
+    date_valid_to = graphene.Date(required=False)
+    json_ext = graphene.types.json.JSONString(required=False)
+
+
+class UpdateGroupInputType(CreateGroupInputType):
+    id = graphene.UUID(required=True)
+
+
+class CreateGroupIndividualInputType(OpenIMISMutation.Input):
+    group_id = graphene.UUID(required=False)
+    benefit_plan_id = graphene.UUID(required=False)
+
+    date_valid_from = graphene.Date(required=False)
+    date_valid_to = graphene.Date(required=False)
+    json_ext = graphene.types.json.JSONString(required=False)
+
+
+class UpdateGroupIndividualInputType(CreateGroupInputType):
     id = graphene.UUID(required=True)
 
 
@@ -209,6 +235,172 @@ class DeleteBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
             data.pop('client_mutation_label')
 
         service = BeneficiaryService(user)
+
+        ids = data.get('ids')
+        if ids:
+            with transaction.atomic():
+                for id in ids:
+                    service.delete({'id': id})
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)
+
+
+class CreateGroupMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+    _mutation_class = "CreateGroupMutation"
+    _mutation_module = "social_protection"
+    _model = Group
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if type(user) is AnonymousUser or not user.has_perms(
+                SocialProtectionConfig.gql_group_create_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = GroupService(user)
+        service.create(data)
+
+    class Input(CreateGroupInputType):
+        pass
+
+
+class UpdateGroupMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+    _mutation_class = "UpdateGroupMutation"
+    _mutation_module = "social_protection"
+    _model = Group
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if type(user) is AnonymousUser or not user.has_perms(
+                SocialProtectionConfig.gql_group_update_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "date_valid_to" not in data:
+            data['date_valid_to'] = None
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = GroupService(user)
+        service.update(data)
+
+    class Input(UpdateGroupInputType):
+        pass
+
+
+class DeleteGroupMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+    _mutation_class = "DeleteGroupMutation"
+    _mutation_module = "social_protection"
+    _model = Group
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if type(user) is AnonymousUser or not user.id or not user.has_perms(
+                SocialProtectionConfig.gql_group_delete_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = GroupService(user)
+
+        ids = data.get('ids')
+        if ids:
+            with transaction.atomic():
+                for id in ids:
+                    service.delete({'id': id})
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)
+
+
+class CreateGroupIndividualMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+    _mutation_class = "CreateGroupIndividualMutation"
+    _mutation_module = "social_protection"
+    _model = GroupIndividual
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if type(user) is AnonymousUser or not user.has_perms(
+                SocialProtectionConfig.gql_group_create_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = GroupIndividualService(user)
+        service.create(data)
+
+    class Input(CreateGroupIndividualInputType):
+        pass
+
+
+class UpdateGroupIndividualMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+    _mutation_class = "UpdateGroupIndividualMutation"
+    _mutation_module = "social_protection"
+    _model = GroupIndividual
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if type(user) is AnonymousUser or not user.has_perms(
+                SocialProtectionConfig.gql_group_update_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "date_valid_to" not in data:
+            data['date_valid_to'] = None
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = GroupIndividualService(user)
+        service.update(data)
+
+    class Input(UpdateGroupIndividualInputType):
+        pass
+
+
+class DeleteGroupIndividualMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+    _mutation_class = "DeleteGroupIndividualMutation"
+    _mutation_module = "social_protection"
+    _model = GroupIndividual
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if type(user) is AnonymousUser or not user.id or not user.has_perms(
+                SocialProtectionConfig.gql_group_delete_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = GroupIndividualService(user)
 
         ids = data.get('ids')
         if ids:

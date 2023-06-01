@@ -18,11 +18,11 @@ from social_protection.gql_mutations import (
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
-    BeneficiaryGQLType
+    BeneficiaryGQLType, GroupGQLType
 )
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary
+    Beneficiary, Group
 )
 from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name, validate_json_schema
 import graphene_django_optimizer as gql_optimizer
@@ -39,6 +39,14 @@ class Query:
     )
     beneficiary = OrderedDjangoFilterConnectionField(
         BeneficiaryGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        dateValidFrom__Gte=graphene.DateTime(),
+        dateValidTo__Lte=graphene.DateTime(),
+        applyDefaultValidityFilter=graphene.Boolean(),
+        client_mutation_id=graphene.String()
+    )
+    group = OrderedDjangoFilterConnectionField(
+        GroupGQLType,
         orderBy=graphene.List(of_type=graphene.String),
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
@@ -62,8 +70,10 @@ class Query:
     )
 
     def resolve_bf_code_validity(self, info, **kwargs):
-        if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
-            raise PermissionDenied(_("unauthorized"))
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_benefit_plan_search_perms
+        )
         errors = validate_bf_unique_code(kwargs['bf_code'])
         if errors:
             return ValidationMessageGQLType(False, error_message=errors[0]['message'])
@@ -71,8 +81,10 @@ class Query:
             return ValidationMessageGQLType(True)
 
     def resolve_bf_name_validity(self, info, **kwargs):
-        if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
-            raise PermissionDenied(_("unauthorized"))
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_benefit_plan_search_perms
+        )
         errors = validate_bf_unique_name(kwargs['bf_name'])
         if errors:
             return ValidationMessageGQLType(False, error_message=errors[0]['message'])
@@ -80,8 +92,10 @@ class Query:
             return ValidationMessageGQLType(True)
 
     def resolve_bf_schema_validity(self, info, **kwargs):
-        if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
-            raise PermissionDenied(_("unauthorized"))
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_benefit_plan_search_perms
+        )
         errors = validate_json_schema(kwargs['bf_schema'])
         if errors:
             return ValidationMessageGQLType(False, error_message=errors[0]['message'])
@@ -89,31 +103,42 @@ class Query:
             return ValidationMessageGQLType(True)
 
     def resolve_benefit_plan(self, info, **kwargs):
-        filters = append_validity_filter(**kwargs)
-
-        client_mutation_id = kwargs.get("client_mutation_id", None)
-        if client_mutation_id:
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
-
         Query._check_permissions(
             info.context.user,
             SocialProtectionConfig.gql_benefit_plan_search_perms
         )
-        query = BenefitPlan.objects.filter(*filters)
-        return gql_optimizer.query(query, info)
-
-    def resolve_beneficiary(self, info, **kwargs):
         filters = append_validity_filter(**kwargs)
-
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
 
+        query = BenefitPlan.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
+    def resolve_beneficiary(self, info, **kwargs):
         Query._check_permissions(
             info.context.user,
             SocialProtectionConfig.gql_beneficiary_search_perms
         )
+        filters = append_validity_filter(**kwargs)
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
         query = Beneficiary.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
+    def resolve_group(self, info, **kwargs):
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_group_search_perms
+        )
+        filters = append_validity_filter(**kwargs)
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        query = Group.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
     @staticmethod

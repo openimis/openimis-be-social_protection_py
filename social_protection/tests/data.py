@@ -91,3 +91,15 @@ service_beneficiary_update_payload = {
     "date_valid_from": "2023-01-01",
     "date_valid_to": "2023-12-31",
 }
+
+service_group_add_payload = {
+    "status": "Potential",
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
+}
+
+service_group_update_payload = {
+    "status": "Active",
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
+}
