@@ -1,6 +1,7 @@
 from django.apps import AppConfig
 
 from core.custom_filters import CustomFilterRegistryPoint
+#from .custom_filters import BenefitPlanCustomFilterWizard, BeneficiaryCustomFilterWizard
 
 
 DEFAULT_CONFIG = {
@@ -44,4 +45,8 @@ class SocialProtectionConfig(AppConfig):
                 setattr(SocialProtectionConfig, field, cfg[field])
 
         # register custom filter
-        CustomFilterRegistryPoint.register_custom_filters(module_name=cls.name)
+        from social_protection.custom_filters import BenefitPlanCustomFilterWizard
+        CustomFilterRegistryPoint.register_custom_filters(
+            module_name=cls.name,
+            custom_filter_class_list=[BenefitPlanCustomFilterWizard]
+        )
