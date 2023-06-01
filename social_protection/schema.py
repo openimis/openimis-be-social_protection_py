@@ -1,7 +1,10 @@
 import graphene
+import pandas as pd
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.core.exceptions import PermissionDenied
+
+from core.gql.export_mixin import ExportableQueryMixin
 
 from django.utils.translation import gettext as _
 from core.gql_queries import ValidationMessageGQLType
@@ -28,7 +31,22 @@ from social_protection.validation import validate_bf_unique_code, validate_bf_un
 import graphene_django_optimizer as gql_optimizer
 
 
-class Query:
+def patch_details(beneficiary_df: pd.DataFrame):
+    # Transform extension to DF columns 
+    df_unfolded = pd.json_normalize(beneficiary_df['json_ext'])
+    # Merge unfolded DataFrame with the original DataFrame
+    df_final = pd.concat([beneficiary_df, df_unfolded], axis=1)
+    df_final = df_final.drop('json_ext', axis=1)
+    return df_final
+
+class Query(ExportableQueryMixin, graphene.ObjectType):
+    export_patches = {
+        'beneficiary': [
+            patch_details
+        ]
+    }
+    exportable_fields = ['beneficiary']
+
     benefit_plan = OrderedDjangoFilterConnectionField(
         BenefitPlanGQLType,
         orderBy=graphene.List(of_type=graphene.String),
