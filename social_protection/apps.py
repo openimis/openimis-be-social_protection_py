@@ -43,7 +43,6 @@ class SocialProtectionConfig(AppConfig):
             if hasattr(SocialProtectionConfig, field):
                 setattr(SocialProtectionConfig, field, cfg[field])
 
-        # register custom filter
         from social_protection.custom_filters import BenefitPlanCustomFilterWizard
         CustomFilterRegistryPoint.register_custom_filters(
             module_name=cls.name,
