@@ -40,7 +40,7 @@ jobs:
       - name: pull openimis backend
         run: |
           rm ./openimis -rf
-          git clone --depth 1 --branch develop https://github.com/openimis/openimis-be_py.git ./openimis
+          git clone --depth 1 --branch coreMIS https://github.com/openimis/openimis-be_py.git ./openimis
       - name: copy current branch
         uses: actions/checkout@v2
         with:
