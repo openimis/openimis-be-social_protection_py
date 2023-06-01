@@ -1,7 +1,6 @@
 from django.apps import AppConfig
 
 from core.custom_filters import CustomFilterRegistryPoint
-#from .custom_filters import BenefitPlanCustomFilterWizard, BeneficiaryCustomFilterWizard
 
 
 DEFAULT_CONFIG = {
