@@ -6,7 +6,6 @@ from individual.models import Individual
 from social_protection.models import GroupIndividual, Group, BenefitPlan
 from social_protection.services import GroupIndividualService
 from individual.tests.data import service_add_payload as service_add_individual_payload
-from individual.tests.data import service_add_payload2 as service_add_individual_payload2
 from social_protection.tests.data import (
     service_group_add_payload,
     service_group_update_payload, service_add_payload
@@ -28,8 +27,8 @@ class GroupIndividualServiceTest(TestCase):
         cls.query_all = GroupIndividual.objects.filter(is_deleted=False)
         cls.benefit_plan = cls.__create_benefit_plan()
         cls.group = cls.__create_group()
-        cls.individual1 = cls.__create_individual(**service_add_individual_payload)
-        cls.individual2 = cls.__create_individual(**service_add_individual_payload2)
+        cls.individual1 = cls.__create_individual()
+        cls.individual2 = cls.__create_individual()
         cls.payload = {
             "individual_id": cls.individual1.id,
             "group_id": cls.group.id,
@@ -67,9 +66,9 @@ class GroupIndividualServiceTest(TestCase):
         self.assertEqual(query.count(), 0)
 
     @classmethod
-    def __create_individual(cls, **individual_payload):
+    def __create_individual(cls):
         object_data = {
-            **individual_payload
+            **service_add_individual_payload
         }
 
         individual = Individual(**object_data)
