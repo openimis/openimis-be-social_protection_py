@@ -1,7 +1,15 @@
 from django.db import models
+from django.utils.translation import gettext as _
 from core import models as core_models
 from individual.models import Individual
 from policyholder.models import PolicyHolder
+
+
+class StatusChoices(models.TextChoices):
+    POTENTIAL = 'POTENTIAL', _('POTENTIAL')
+    ACTIVE = 'ACTIVE', _('ACTIVE')
+    GRADUATED = 'GRADUATED', _('GRADUATED')
+    SUSPENDED = 'SUSPENDED', _('SUSPENDED')
 
 
 class BenefitPlan(core_models.HistoryBusinessModel):
@@ -20,4 +28,15 @@ class BenefitPlan(core_models.HistoryBusinessModel):
 class Beneficiary(core_models.HistoryBusinessModel):
     individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
-    status = models.CharField(max_length=100, null=False)
+    status = models.CharField(max_length=100, choices=StatusChoices.choices, null=False)
+
+
+class Group(core_models.HistoryBusinessModel):
+    individuals = models.ManyToManyField(Individual, through='GroupIndividual')
+    benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
+    status = models.CharField(max_length=100, choices=StatusChoices.choices, null=False)
+
+
+class GroupIndividual(core_models.HistoryBusinessModel):
+    group = models.ForeignKey(Group, models.DO_NOTHING, null=False)
+    individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
