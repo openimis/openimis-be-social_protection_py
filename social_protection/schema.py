@@ -18,11 +18,11 @@ from social_protection.gql_mutations import (
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
-    BeneficiaryGQLType, GroupGQLType
+    BeneficiaryGQLType, GroupGQLType, GroupIndividualGQLType
 )
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary, Group
+    Beneficiary, Group, GroupIndividual
 )
 from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name, validate_json_schema
 import graphene_django_optimizer as gql_optimizer
@@ -47,6 +47,14 @@ class Query:
     )
     group = OrderedDjangoFilterConnectionField(
         GroupGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        dateValidFrom__Gte=graphene.DateTime(),
+        dateValidTo__Lte=graphene.DateTime(),
+        applyDefaultValidityFilter=graphene.Boolean(),
+        client_mutation_id=graphene.String()
+    )
+    group_individual = OrderedDjangoFilterConnectionField(
+        GroupIndividualGQLType,
         orderBy=graphene.List(of_type=graphene.String),
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
@@ -139,6 +147,19 @@ class Query:
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
 
         query = Group.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
+    def resolve_group_individual(self, info, **kwargs):
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_group_search_perms
+        )
+        filters = append_validity_filter(**kwargs)
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        query = GroupIndividual.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
     @staticmethod
