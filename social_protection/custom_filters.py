@@ -41,14 +41,8 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         """
         list_of_tuple_with_definitions = []
         benefit_plan_id = kwargs.get('uuid', None)
-        if benefit_plan_id:
-            benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).first()
-            if benefit_plan:
-                list_of_tuple_with_definitions.extend(self.__process_schema_and_build_tuple(benefit_plan, tuple_type))
-            else:
-                raise Exception('There is no benefit plan with such id')
-        else:
-            raise Exception('Id of benefit plan is not provided')
+        benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).get()
+        list_of_tuple_with_definitions.extend(self.__process_schema_and_build_tuple(benefit_plan, tuple_type))
         return list_of_tuple_with_definitions
 
     def __process_schema_and_build_tuple(
