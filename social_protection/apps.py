@@ -1,5 +1,8 @@
 from django.apps import AppConfig
 
+from core.custom_filters import CustomFilterRegistryPoint
+
+
 DEFAULT_CONFIG = {
     "gql_benefit_plan_search_perms": ["160001"],
     "gql_benefit_plan_create_perms": ["160002"],
@@ -39,3 +42,9 @@ class SocialProtectionConfig(AppConfig):
         for field in cfg:
             if hasattr(SocialProtectionConfig, field):
                 setattr(SocialProtectionConfig, field, cfg[field])
+
+        from social_protection.custom_filters import BenefitPlanCustomFilterWizard
+        CustomFilterRegistryPoint.register_custom_filters(
+            module_name=cls.name,
+            custom_filter_class_list=[BenefitPlanCustomFilterWizard]
+        )
