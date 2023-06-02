@@ -39,10 +39,9 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         :return: A list of named tuples representing the definition of how to create filters.
         :rtype: List[namedtuple]
         """
-        list_of_tuple_with_definitions = []
         benefit_plan_id = kwargs.get('uuid', None)
         benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).get()
-        list_of_tuple_with_definitions.extend(self.__process_schema_and_build_tuple(benefit_plan, tuple_type))
+        list_of_tuple_with_definitions = self.__process_schema_and_build_tuple(benefit_plan, tuple_type)
         return list_of_tuple_with_definitions
 
     def __process_schema_and_build_tuple(
