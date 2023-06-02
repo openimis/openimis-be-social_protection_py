@@ -39,39 +39,36 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         :return: A list of named tuples representing the definition of how to create filters.
         :rtype: List[namedtuple]
         """
-        logger.info('starting loading definition of custom filter')
         list_of_tuple_with_definitions = []
         benefit_plan_id = kwargs.get('uuid', None)
         if benefit_plan_id:
             benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).first()
             if benefit_plan:
-                self.__process_schema_and_build_tuple(benefit_plan, tuple_type, list_of_tuple_with_definitions)
+                list_of_tuple_with_definitions.extend(self.__process_schema_and_build_tuple(benefit_plan, tuple_type))
             else:
-                logger.info('There is no benefit plan with such id')
+                logger.warning('There is no benefit plan with such id')
         else:
-            logger.info('Id of benefit plan is not provided')
-        logger.info('Output is prepared with definition how to build filters')
+            logger.warning('Id of benefit plan is not provided')
         return list_of_tuple_with_definitions
 
     def __process_schema_and_build_tuple(
         self,
         benefit_plan: BenefitPlan,
-        tuple_type: type,
-        list_of_tuple_with_definitions: List[namedtuple]
-    ) -> None:
+        tuple_type: type
+    ) -> List[namedtuple]:
+        tuples_with_definitions = []
         schema = benefit_plan.beneficiary_data_schema
-        if schema:
-            if 'properties' in schema:
-                properties = schema['properties']
-                for key in properties:
-                    property = properties[key]
-                    tuple_with_definition = tuple_type(
-                        field=key,
-                        filter=self.FILTERS_BASED_ON_FIELD_TYPE[property['type']],
-                        type=property['type']
-                    )
-                    list_of_tuple_with_definitions.append(tuple_with_definition)
-            else:
-                logger.info('There are no properties provided in schema from that benefit plan')
+        if schema and 'properties' in schema:
+            properties = schema['properties']
+            for key, value in properties.items():
+                tuple_with_definition = tuple_type(
+                    field=key,
+                    filter=self.FILTERS_BASED_ON_FIELD_TYPE[value['type']],
+                    type=value['type']
+                )
+                tuples_with_definitions.append(tuple_with_definition)
         else:
-            logger.info('There is no schema provided in benefit plan')
+            logger.warning('Cannot retrieve definitions of filters based '
+                           'on the provided schema due to either empty schema '
+                           'or missing properties in schema file')
+        return tuples_with_definitions
