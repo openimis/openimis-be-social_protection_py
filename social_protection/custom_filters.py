@@ -46,9 +46,9 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
             if benefit_plan:
                 list_of_tuple_with_definitions.extend(self.__process_schema_and_build_tuple(benefit_plan, tuple_type))
             else:
-                logger.warning('There is no benefit plan with such id')
+                raise Exception('There is no benefit plan with such id')
         else:
-            logger.warning('Id of benefit plan is not provided')
+            raise Exception('Id of benefit plan is not provided')
         return list_of_tuple_with_definitions
 
     def __process_schema_and_build_tuple(
