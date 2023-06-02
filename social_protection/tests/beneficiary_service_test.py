@@ -3,7 +3,7 @@ import copy
 from django.test import TestCase
 
 from individual.models import Individual
-from individual.tests.data import service_add_payload as service_add_individual_payload
+from individual.tests.data import service_add_individual_payload
 
 from social_protection.models import Beneficiary, BenefitPlan
 from social_protection.services import BeneficiaryService
