@@ -143,44 +143,6 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         return gql_optimizer.query(query, info)
 
     @staticmethod
-    def __cast_value(value, value_type):
-        if value_type == 'integer':
-            return int(value)
-        elif value_type == 'string':
-            return str(value)
-        elif value_type == 'numeric':
-            return float(value)
-        elif value_type == 'boolean':
-            print('lets go')
-            print(value)
-            print(value.lower())
-            cleaned_value = Query.remove_unexpected_chars(value)
-            if cleaned_value.lower() == 'true':
-                print('true')
-                return True
-            elif cleaned_value.lower() == 'false':
-                print('false')
-                return False
-        elif value_type == 'date':
-            # Perform date parsing logic here
-            # Assuming you have a specific date format, you can use datetime.strptime
-            # Example: return datetime.strptime(value, '%Y-%m-%d').date()
-            pass
-
-            # Return None if the value type is not recognized
-        return None
-
-    @staticmethod
-    def remove_unexpected_chars(string):
-        # Define the pattern for unwanted characters
-        pattern = r'[^\w\s]'  # Remove any character that is not alphanumeric or whitespace
-
-        # Use re.sub() to remove the unwanted characters
-        cleaned_string = re.sub(pattern, '', string)
-
-        return cleaned_string
-
-    @staticmethod
     def _check_permissions(user, permission):
         if type(user) is AnonymousUser or not user.id or not user.has_perms(permission):
             raise PermissionError("Unauthorized")
