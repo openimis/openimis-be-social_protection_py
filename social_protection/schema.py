@@ -12,8 +12,8 @@ from django.utils.translation import gettext as _
 from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
 from core.utils import append_validity_filter
-from core.custom_filters import CustomFilterWizardStorage
 from social_protection.apps import SocialProtectionConfig
+from social_protection.custom_filters import BenefitPlanCustomFilterWizard
 from social_protection.gql_mutations import (
     CreateBenefitPlanMutation,
     UpdateBenefitPlanMutation,
@@ -139,7 +139,7 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
 
         custom_filters = kwargs.get("customFilters", None)
         if custom_filters:
-            query = CustomFilterWizardStorage.apply_filter_to_queryset(custom_filters, query)
+            query = BenefitPlanCustomFilterWizard().apply_filter_to_queryset(custom_filters, query)
         return gql_optimizer.query(query, info)
 
     @staticmethod
