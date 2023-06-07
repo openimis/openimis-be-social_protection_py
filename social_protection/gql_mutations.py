@@ -273,7 +273,7 @@ class CreateGroupBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMu
         service = GroupBeneficiaryService(user)
         service.create(data)
 
-    class Input(CreateBeneficiaryInputType):
+    class Input(CreateGroupBeneficiaryInputType):
         pass
 
 
@@ -301,7 +301,7 @@ class UpdateGroupBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMu
         service = GroupBeneficiaryService(user)
         service.update(data)
 
-    class Input(UpdateBeneficiaryInputType):
+    class Input(UpdateGroupBeneficiaryInputType):
         pass
 
 
