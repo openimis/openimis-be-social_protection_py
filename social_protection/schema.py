@@ -1,5 +1,7 @@
 import graphene
 import pandas as pd
+import re
+
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.core.exceptions import PermissionDenied
@@ -10,6 +12,7 @@ from django.utils.translation import gettext as _
 from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
 from core.utils import append_validity_filter
+from core.custom_filters import CustomFilterWizardStorage
 from social_protection.apps import SocialProtectionConfig
 from social_protection.gql_mutations import (
     CreateBenefitPlanMutation,
@@ -61,7 +64,8 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
         applyDefaultValidityFilter=graphene.Boolean(),
-        client_mutation_id=graphene.String()
+        client_mutation_id=graphene.String(),
+        customFilters=graphene.List(of_type=graphene.String),
     )
     bf_code_validity = graphene.Field(
         ValidationMessageGQLType,
@@ -132,7 +136,49 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             SocialProtectionConfig.gql_beneficiary_search_perms
         )
         query = Beneficiary.objects.filter(*filters)
+
+        custom_filters = kwargs.get("customFilters", None)
+        if custom_filters:
+            query = CustomFilterWizardStorage.apply_filter_to_queryset(custom_filters, query)
         return gql_optimizer.query(query, info)
+
+    @staticmethod
+    def __cast_value(value, value_type):
+        if value_type == 'integer':
+            return int(value)
+        elif value_type == 'string':
+            return str(value)
+        elif value_type == 'numeric':
+            return float(value)
+        elif value_type == 'boolean':
+            print('lets go')
+            print(value)
+            print(value.lower())
+            cleaned_value = Query.remove_unexpected_chars(value)
+            if cleaned_value.lower() == 'true':
+                print('true')
+                return True
+            elif cleaned_value.lower() == 'false':
+                print('false')
+                return False
+        elif value_type == 'date':
+            # Perform date parsing logic here
+            # Assuming you have a specific date format, you can use datetime.strptime
+            # Example: return datetime.strptime(value, '%Y-%m-%d').date()
+            pass
+
+            # Return None if the value type is not recognized
+        return None
+
+    @staticmethod
+    def remove_unexpected_chars(string):
+        # Define the pattern for unwanted characters
+        pattern = r'[^\w\s]'  # Remove any character that is not alphanumeric or whitespace
+
+        # Use re.sub() to remove the unwanted characters
+        cleaned_string = re.sub(pattern, '', string)
+
+        return cleaned_string
 
     @staticmethod
     def _check_permissions(user, permission):
