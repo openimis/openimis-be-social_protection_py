@@ -57,7 +57,9 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
         applyDefaultValidityFilter=graphene.Boolean(),
-        client_mutation_id=graphene.String()
+        client_mutation_id=graphene.String(),
+        individual_id=graphene.String(),
+        beneficiary_status=graphene.String(),
     )
     beneficiary = OrderedDjangoFilterConnectionField(
         BeneficiaryGQLType,
@@ -124,6 +126,14 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        individual_id = kwargs.get("individual_id", None)
+        if individual_id:
+            filters.append(Q(beneficiary__individual__id=individual_id))
+
+        beneficiary_status = kwargs.get("beneficiary_status", None)
+        if beneficiary_status:
+            filters.append(Q(beneficiary__status=beneficiary_status))
 
         Query._check_permissions(
             info.context.user,
