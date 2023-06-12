@@ -27,6 +27,6 @@ jobs:
           ssh -o StrictHostKeyChecking=no -T ${{ secrets.OPENIMIS_USER }}@${{ secrets.OPENIMIS_HOST }} -p 1022
           ssh ${{ secrets.OPENIMIS_USER }}@${{ secrets.OPENIMIS_HOST }} -p 1022 << EOF
             cd coreMIS/
-            docker-compose pull && docker-compose up --build -d
+            docker-compose build backend gateway && docker-compose up -d
           EOF
           
