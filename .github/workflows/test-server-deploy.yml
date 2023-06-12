@@ -16,12 +16,12 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          ssh-keyscan ${{ secrets.OPENIMIS_HOST }} >> ~/.ssh/known_hosts
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Run Docker Compose
         run: |
-          ssh ${{ secrets.OPENIMIS_HOST }} -p 1022
+          ssh ${{ secrets.OPENIMIS_USER }}@${{ secrets.OPENIMIS_HOST }} -p 1022
           cd /coreMIS
           docker-compose pull && docker-compose up --build -d
