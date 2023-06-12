@@ -17,15 +17,16 @@ from social_protection.gql_mutations import (
     DeleteBenefitPlanMutation,
     CreateBeneficiaryMutation,
     UpdateBeneficiaryMutation,
-    DeleteBeneficiaryMutation
+    DeleteBeneficiaryMutation, CreateGroupBeneficiaryMutation, UpdateGroupBeneficiaryMutation,
+    DeleteGroupBeneficiaryMutation
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
-    BeneficiaryGQLType
+    BeneficiaryGQLType, GroupBeneficiaryGQLType
 )
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary
+    Beneficiary, GroupBeneficiary
 )
 from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name, validate_json_schema
 import graphene_django_optimizer as gql_optimizer
@@ -43,9 +44,12 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
     export_patches = {
         'beneficiary': [
             patch_details
+        ],
+        'group_beneficiary': [
+            patch_details
         ]
     }
-    exportable_fields = ['beneficiary']
+    exportable_fields = ['beneficiary', 'group_beneficiary']
 
     benefit_plan = OrderedDjangoFilterConnectionField(
         BenefitPlanGQLType,
@@ -53,10 +57,20 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
         applyDefaultValidityFilter=graphene.Boolean(),
-        client_mutation_id=graphene.String()
+        client_mutation_id=graphene.String(),
+        individual_id=graphene.String(),
+        beneficiary_status=graphene.String(),
     )
     beneficiary = OrderedDjangoFilterConnectionField(
         BeneficiaryGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        dateValidFrom__Gte=graphene.DateTime(),
+        dateValidTo__Lte=graphene.DateTime(),
+        applyDefaultValidityFilter=graphene.Boolean(),
+        client_mutation_id=graphene.String()
+    )
+    group_beneficiary = OrderedDjangoFilterConnectionField(
+        GroupBeneficiaryGQLType,
         orderBy=graphene.List(of_type=graphene.String),
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
@@ -113,6 +127,14 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         if client_mutation_id:
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
 
+        individual_id = kwargs.get("individual_id", None)
+        if individual_id:
+            filters.append(Q(beneficiary__individual__id=individual_id))
+
+        beneficiary_status = kwargs.get("beneficiary_status", None)
+        if beneficiary_status:
+            filters.append(Q(beneficiary__status=beneficiary_status))
+
         Query._check_permissions(
             info.context.user,
             SocialProtectionConfig.gql_benefit_plan_search_perms
@@ -134,6 +156,20 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         query = Beneficiary.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
+    def resolve_group_beneficiary(self, info, **kwargs):
+        filters = append_validity_filter(**kwargs)
+
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_beneficiary_search_perms
+        )
+        query = GroupBeneficiary.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
     @staticmethod
     def _check_permissions(user, permission):
         if type(user) is AnonymousUser or not user.id or not user.has_perms(permission):
@@ -148,3 +184,7 @@ class Mutation(graphene.ObjectType):
     create_beneficiary = CreateBeneficiaryMutation.Field()
     update_beneficiary = UpdateBeneficiaryMutation.Field()
     delete_beneficiary = DeleteBeneficiaryMutation.Field()
+
+    create_group_beneficiary = CreateGroupBeneficiaryMutation.Field()
+    update_group_beneficiary = UpdateGroupBeneficiaryMutation.Field()
+    delete_group_beneficiary = DeleteGroupBeneficiaryMutation.Field()

@@ -88,5 +88,10 @@ def validate_not_empty_field(string, field):
         }}]
     return []
 
+
 class BeneficiaryValidation(BaseModelValidation):
+    OBJECT_TYPE = Beneficiary
+
+
+class GroupBeneficiaryValidation(BaseModelValidation):
     OBJECT_TYPE = Beneficiary

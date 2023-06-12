@@ -81,13 +81,13 @@ service_update_payload = {
 }
 
 service_beneficiary_add_payload = {
-    "status": "Potential",
+    "status": "POTENTIAL",
     "date_valid_from": "2023-01-01",
     "date_valid_to": "2023-12-31",
 }
 
 service_beneficiary_update_payload = {
-    "status": "Active",
+    "status": "ACTIVE",
     "date_valid_from": "2023-01-01",
     "date_valid_to": "2023-12-31",
 }

@@ -3,8 +3,8 @@ from graphene_django import DjangoObjectType
 
 from core import prefix_filterset, ExtendedConnection
 from policyholder.gql import PolicyHolderGQLType
-from individual.gql_queries import IndividualGQLType
-from social_protection.models import Beneficiary, BenefitPlan
+from individual.gql_queries import IndividualGQLType, GroupGQLType
+from social_protection.models import Beneficiary, BenefitPlan, GroupBeneficiary
 
 
 class BenefitPlanGQLType(DjangoObjectType):
@@ -42,6 +42,27 @@ class BeneficiaryGQLType(DjangoObjectType):
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
             **prefix_filterset("individual__", IndividualGQLType._meta.filter_fields),
+            **prefix_filterset("benefit_plan__", BenefitPlanGQLType._meta.filter_fields),
+            "date_created": ["exact", "lt", "lte", "gt", "gte"],
+            "date_updated": ["exact", "lt", "lte", "gt", "gte"],
+            "is_deleted": ["exact"],
+            "version": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+
+class GroupBeneficiaryGQLType(DjangoObjectType):
+    uuid = graphene.String(source='uuid')
+
+    class Meta:
+        model = GroupBeneficiary
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "status": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
+            "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
+            **prefix_filterset("group__", GroupGQLType._meta.filter_fields),
             **prefix_filterset("benefit_plan__", BenefitPlanGQLType._meta.filter_fields),
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
