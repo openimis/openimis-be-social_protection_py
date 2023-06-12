@@ -14,18 +14,18 @@ jobs:
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.CORE_MIS_DEPLOYMENT_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.OPENIMIS_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.CORE_MIS_DEPLOYMENT_HOST }} >> ~/.ssh/known_hosts
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          OPENIMIS_USER: ${{ secrets.OPENIMIS_USER }}
-          OPENIMIS_HOST: ${{ secrets.OPENIMIS_HOST }}
+          CORE_MIS_DEPLOYMENT_SSH_KEY: ${{ secrets.CORE_MIS_DEPLOYMENT_SSH_KEY }}
+          CORE_MIS_DEPLOYMENT_USER: ${{ secrets.CORE_MIS_DEPLOYMENT_USER }}
+          CORE_MIS_DEPLOYMENT_HOST: ${{ secrets.CORE_MIS_DEPLOYMENT_HOST }}
 
       - name: Run Docker Compose
         run: |
-          ssh -o StrictHostKeyChecking=no -T ${{ secrets.OPENIMIS_USER }}@${{ secrets.OPENIMIS_HOST }} -p 1022
-          ssh ${{ secrets.OPENIMIS_USER }}@${{ secrets.OPENIMIS_HOST }} -p 1022 << EOF
+          ssh -o StrictHostKeyChecking=no -T ${{ secrets.CORE_MIS_DEPLOYMENT_USER }}@${{ secrets.CORE_MIS_DEPLOYMENT_HOST }} -p 1022
+          ssh ${{ secrets.CORE_MIS_DEPLOYMENT_USER }}@${{ secrets.CORE_MIS_DEPLOYMENT_HOST }} -p 1022 << EOF
             cd coreMIS/
             docker-compose build backend gateway && docker-compose up -d
           EOF
