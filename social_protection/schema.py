@@ -44,9 +44,12 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
     export_patches = {
         'beneficiary': [
             patch_details
+        ],
+        'group_beneficiary': [
+            patch_details
         ]
     }
-    exportable_fields = ['beneficiary']
+    exportable_fields = ['beneficiary', 'group_beneficiary']
 
     benefit_plan = OrderedDjangoFilterConnectionField(
         BenefitPlanGQLType,
