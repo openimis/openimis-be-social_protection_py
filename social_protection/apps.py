@@ -31,6 +31,8 @@ class SocialProtectionConfig(AppConfig):
     def ready(self):
         from core.models import ModuleConfiguration
 
+        print("Hello automatic update")
+
         cfg = ModuleConfiguration.get_or_default(self.name, DEFAULT_CONFIG)
         self.__load_config(cfg)
 
