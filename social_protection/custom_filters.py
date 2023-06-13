@@ -2,6 +2,7 @@ import logging
 import re
 
 from collections import namedtuple
+from django.db.models.query import QuerySet
 from typing import List
 
 from core.custom_filters import CustomFilterWizardInterface
@@ -45,7 +46,19 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         list_of_tuple_with_definitions = self.__process_schema_and_build_tuple(benefit_plan, tuple_type)
         return list_of_tuple_with_definitions
 
-    def apply_filter_to_queryset(self, custom_filters, query):
+    def apply_filter_to_queryset(self, custom_filters: List[namedtuple], query: QuerySet):
+        """
+        Apply custom filters to a queryset.
+
+        :param custom_filters: List of named tuples representing custom filters.
+        :type custom_filters: List[namedtuple]
+
+        :param query: The original queryset with filters.
+        :type query: django.db.models.query.QuerySet
+
+        :return: The updated queryset with additional filters applied.
+        :rtype: django.db.models.query.QuerySet
+        """
         for filter_part in custom_filters:
             field, value = filter_part.split('=')
             field, value_type = field.rsplit('__', 1)
@@ -76,7 +89,7 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
                            'or missing properties in schema file')
         return tuples_with_definitions
 
-    def __cast_value(self, value, value_type):
+    def __cast_value(self, value: str, value_type: str):
         if value_type == 'integer':
             return int(value)
         elif value_type == 'string':
@@ -98,8 +111,7 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         # Return None if the value type is not recognized
         return None
 
-    def __remove_unexpected_chars(self, string):
-        # Define the pattern for unwanted characters
+    def __remove_unexpected_chars(self, string: str):
         pattern = r'[^\w\s]'  # Remove any character that is not alphanumeric or whitespace
 
         # Use re.sub() to remove the unwanted characters
