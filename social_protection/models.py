@@ -30,6 +30,7 @@ class BenefitPlan(core_models.HistoryBusinessModel):
     type = models.CharField(
         max_length=100, choices=BenefitPlanType.choices, default=BenefitPlanType.INDIVIDUAL_TYPE, null=False
     )
+    description = models.CharField(max_length=1024, null=True, blank=True)
 
 
 class Beneficiary(core_models.HistoryBusinessModel):
