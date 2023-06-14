@@ -43,6 +43,7 @@ def patch_details(beneficiary_df: pd.DataFrame):
     df_final = df_final.drop('json_ext', axis=1)
     return df_final
 
+
 class Query(ExportableQueryMixin, graphene.ObjectType):
     export_patches = {
         'beneficiary': [
@@ -53,6 +54,7 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         ]
     }
     exportable_fields = ['beneficiary', 'group_beneficiary']
+    type_of_custom_filter_wizard = BenefitPlanCustomFilterWizard
 
     benefit_plan = OrderedDjangoFilterConnectionField(
         BenefitPlanGQLType,
