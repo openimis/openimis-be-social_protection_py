@@ -1,5 +1,7 @@
 import graphene
 import pandas as pd
+import re
+
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.core.exceptions import PermissionDenied
@@ -11,6 +13,7 @@ from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
 from core.utils import append_validity_filter
 from social_protection.apps import SocialProtectionConfig
+from social_protection.custom_filters import BenefitPlanCustomFilterWizard
 from social_protection.gql_mutations import (
     CreateBenefitPlanMutation,
     UpdateBenefitPlanMutation,
@@ -40,6 +43,7 @@ def patch_details(beneficiary_df: pd.DataFrame):
     df_final = df_final.drop('json_ext', axis=1)
     return df_final
 
+
 class Query(ExportableQueryMixin, graphene.ObjectType):
     export_patches = {
         'beneficiary': [
@@ -50,6 +54,7 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         ]
     }
     exportable_fields = ['beneficiary', 'group_beneficiary']
+    type_of_custom_filter_wizard = BenefitPlanCustomFilterWizard
 
     benefit_plan = OrderedDjangoFilterConnectionField(
         BenefitPlanGQLType,
@@ -68,7 +73,8 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
         applyDefaultValidityFilter=graphene.Boolean(),
-        client_mutation_id=graphene.String()
+        client_mutation_id=graphene.String(),
+        customFilters=graphene.List(of_type=graphene.String),
     )
     group_beneficiary = OrderedDjangoFilterConnectionField(
         GroupBeneficiaryGQLType,
@@ -159,6 +165,10 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             SocialProtectionConfig.gql_beneficiary_search_perms
         )
         query = Beneficiary.objects.filter(*filters)
+
+        custom_filters = kwargs.get("customFilters", None)
+        if custom_filters:
+            query = BenefitPlanCustomFilterWizard().apply_filter_to_queryset(custom_filters, query)
         return gql_optimizer.query(query, info)
 
     def resolve_group_beneficiary(self, info, **kwargs):
