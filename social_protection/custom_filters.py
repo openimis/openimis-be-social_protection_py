@@ -32,8 +32,8 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         This method retrieves the definition of how to create filters and returns it as a list of named tuples.
         Each named tuple is built with the provided `tuple_type` and has the fields `field`, `filter`, and `value`.
 
-        Example named tuple: <Type>(field=<str>, filter=<str>, value=<str>)
-        Example usage: BenefitPlan(field='income', filter='lt, gte, icontains, exact', value='')
+        Example named tuple: <Type>(field=<str>, filter=<str>, type=<str>)
+        Example usage: BenefitPlan(field='income', filter='lt, gte, icontains, exact', type='integer')
 
         :param tuple_type: The type of the named tuple.
         :type tuple_type: type
@@ -46,18 +46,16 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         list_of_tuple_with_definitions = self.__process_schema_and_build_tuple(benefit_plan, tuple_type)
         return list_of_tuple_with_definitions
 
-    def apply_filter_to_queryset(self, custom_filters: List[namedtuple], query: QuerySet):
+    def apply_filter_to_queryset(self, custom_filters: List[namedtuple], query: QuerySet) -> QuerySet:
         """
         Apply custom filters to a queryset.
 
-        :param custom_filters: List of named tuples representing custom filters.
-        :type custom_filters: List[namedtuple]
+        :param custom_filters: Structure of custom filter tuple: <Type>(field=<str>, filter=<str>, type=<str>).
+         Example usage of filter tuple: BenefitPlan(field='income', filter='lt, gte, icontains, exact', type='integer')
 
-        :param query: The original queryset with filters.
-        :type query: django.db.models.query.QuerySet
+        :param query: The original queryset with filters for example: Queryset[Beneficiary].
 
-        :return: The updated queryset with additional filters applied.
-        :rtype: django.db.models.query.QuerySet
+        :return: The updated queryset with additional filters applied for example: Queryset[Beneficiary].
         """
         for filter_part in custom_filters:
             field, value = filter_part.split('=')
