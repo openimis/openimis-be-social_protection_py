@@ -51,7 +51,7 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         Apply custom filters to a queryset.
 
         :param custom_filters: Structure of custom filter tuple: <Type>(field=<str>, filter=<str>, type=<str>).
-         Example usage of filter tuple: BenefitPlan(field='income', filter='lt, gte, icontains, exact', type='integer')
+        Example usage of filter tuple: BenefitPlan(field='income', filter='lt, gte, icontains, exact', type='integer')
 
         :param query: The original queryset with filters for example: Queryset[Beneficiary].
 
