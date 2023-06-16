@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-05-22 14:19+0200\n"
+"POT-Creation-Date: 2023-06-16 13:11+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,27 +18,65 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #: social_protection/schema.py:41 social_protection/schema.py:50
+#: social_protection/schema.py:105 social_protection/schema.py:114
+#: social_protection/schema.py:123
 msgid "unauthorized"
 msgstr "User not authorized for this operation"
 
-#: social_protection/validation.py:54
-#: social_protection/validation.py:46
+#: social_protection/validation.py:54 social_protection/validation.py:46
+#: social_protection/validation.py:53
 #, python-format
 msgid "social_protection.validation.benefit_plan.code_exists"
 msgstr "BenefitPlan code %(code) already exists"
 
-#: social_protection/validation.py:61
-#: social_protection/validation.py:55
+#: social_protection/validation.py:61 social_protection/validation.py:55
+#: social_protection/validation.py:62
 #, python-format
 msgid "social_protection.validation.benefit_plan.name_exists"
 msgstr "BenefitPlan name %(name) already exists"
 
-#: social_protection/validation.py:70
-#: social_protection/validation.py:66
+#: social_protection/validation.py:70 social_protection/validation.py:66
+#: social_protection/validation.py:75
 #, python-format
 msgid "social_protection.validation.benefit_plan.invalid_schema"
 msgstr "BenefitPlan schema is not valid %(error)"
 
-#: social_protection/validation.py:73
+#: social_protection/validation.py:73 social_protection/validation.py:86
 msgid "social_protection.validation.field_empty"
 msgstr "%(field) can't be empty"
+
+#: social_protection/validation.py:79
+msgid "social_protection.validation.benefit_plan.invalid_json"
+msgstr "Invalid json %(error)"
+
+#: social_protection/models.py:11
+msgid "social_protection.models.beneficiary_status.POTENTIAL"
+msgstr "POTENTIAL"
+
+#: social_protection/models.py:12
+msgid "social_protection.models.beneficiary_status.ACTIVE"
+msgstr "ACTIVE"
+
+#: social_protection/models.py:13
+msgid "social_protection.models.beneficiary_status.GRADUATED"
+msgstr "GRADUATED"
+
+#: social_protection/models.py:14
+msgid "social_protection.models.beneficiary_status.SUSPENDED"
+msgstr "SUSPENDED"
+
+#: social_protection/models.py:19
+msgid "social_protection.models.benefit_plan_type.INDIVIDUAL"
+msgstr "INDIVIDUAL"
+
+#: social_protection/models.py:20
+msgid "social_protection.models.benefit_plan_type.GROUP"
+msgstr "GROUP"
+
+#: social_protection/models.py:43
+msgid "social_protection.models.beneficiary.validation"
+msgstr "Beneficiary must be associated with an individual benefit plan."
+
+#: social_protection/models.py:55
+msgid "social_protection.models.group_beneficiary.validation"
+msgstr "Group beneficiary must be associated with a group benefit plan."

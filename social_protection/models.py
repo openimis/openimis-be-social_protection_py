@@ -8,16 +8,16 @@ from policyholder.models import PolicyHolder
 
 
 class BeneficiaryStatus(models.TextChoices):
-    POTENTIAL = "POTENTIAL", _("POTENTIAL")
-    ACTIVE = "ACTIVE", _("ACTIVE")
-    GRADUATED = "GRADUATED", _("GRADUATED")
-    SUSPENDED = "SUSPENDED", _("SUSPENDED")
+    POTENTIAL = "POTENTIAL", _("social_protection.models.beneficiary_status.POTENTIAL")
+    ACTIVE = "ACTIVE", _("social_protection.models.beneficiary_status.ACTIVE")
+    GRADUATED = "GRADUATED", _("social_protection.models.beneficiary_status.GRADUATED")
+    SUSPENDED = "SUSPENDED", _("social_protection.models.beneficiary_status.SUSPENDED")
 
 
 class BenefitPlan(core_models.HistoryBusinessModel):
     class BenefitPlanType(models.TextChoices):
-        INDIVIDUAL_TYPE = "INDIVIDUAL", _("INDIVIDUAL")
-        GROUP_TYPE = "GROUP", _("GROUP")
+        INDIVIDUAL_TYPE = "INDIVIDUAL", _("social_protection.models.benefit_plan_type.INDIVIDUAL")
+        GROUP_TYPE = "GROUP", _("social_protection.models.benefit_plan_type.GROUP")
 
     code = models.CharField(max_length=8, null=False)
     name = models.CharField(max_length=255, null=False)
@@ -40,7 +40,7 @@ class Beneficiary(core_models.HistoryBusinessModel):
 
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE:
-            raise ValidationError(_("Beneficiary must be associated with an individual benefit plan."))
+            raise ValidationError(_("social_protection.models.beneficiary.validation"))
 
         super().clean()
 
@@ -52,6 +52,6 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
 
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.GROUP_TYPE:
-            raise ValidationError(_("Group beneficiary must be associated with a group benefit plan."))
+            raise ValidationError(_("social_protection.models.group_beneficiary.validation"))
 
         super().clean()
