@@ -9,11 +9,11 @@ from django.core.exceptions import PermissionDenied
 from core.gql.export_mixin import ExportableQueryMixin
 
 from django.utils.translation import gettext as _
+from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
 from core.utils import append_validity_filter
 from social_protection.apps import SocialProtectionConfig
-from social_protection.custom_filters import BenefitPlanCustomFilterWizard
 from social_protection.gql_mutations import (
     CreateBenefitPlanMutation,
     UpdateBenefitPlanMutation,
@@ -54,7 +54,8 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         ]
     }
     exportable_fields = ['beneficiary', 'group_beneficiary']
-    type_of_custom_filter_wizard = BenefitPlanCustomFilterWizard
+    module_name = "social_protection"
+    object_type = "BenefitPlan"
 
     benefit_plan = OrderedDjangoFilterConnectionField(
         BenefitPlanGQLType,
@@ -168,7 +169,12 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
 
         custom_filters = kwargs.get("customFilters", None)
         if custom_filters:
-            query = BenefitPlanCustomFilterWizard().apply_filter_to_queryset(custom_filters, query)
+            query = CustomFilterWizardStorage.build_custom_filters_queryset(
+                Query.module_name,
+                Query.object_type,
+                custom_filters,
+                query
+            )
         return gql_optimizer.query(query, info)
 
     def resolve_group_beneficiary(self, info, **kwargs):

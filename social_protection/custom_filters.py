@@ -46,7 +46,7 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         list_of_tuple_with_definitions = self.__process_schema_and_build_tuple(benefit_plan, tuple_type)
         return list_of_tuple_with_definitions
 
-    def apply_filter_to_queryset(self, custom_filters: List[namedtuple], query: QuerySet) -> QuerySet:
+    def apply_filter_to_queryset(self, custom_filters: List[namedtuple], query: QuerySet, relation=None) -> QuerySet:
         """
         Apply custom filters to a queryset.
 
@@ -55,13 +55,16 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
 
         :param query: The original queryset with filters for example: Queryset[Beneficiary].
 
+        :param relation: The optional argument which defines the related field in queryset for example 'beneficiary'
+        :type relation: str or None
+
         :return: The updated queryset with additional filters applied for example: Queryset[Beneficiary].
         """
         for filter_part in custom_filters:
             field, value = filter_part.split('=')
             field, value_type = field.rsplit('__', 1)
             value = self.__cast_value(value, value_type)
-            filter_kwargs = {f"json_ext__{field}": value}
+            filter_kwargs = {f"{relation}__json_ext__{field}" if relation else f"json_ext__{field}": value}
             query = query.filter(**filter_kwargs)
         return query
 
