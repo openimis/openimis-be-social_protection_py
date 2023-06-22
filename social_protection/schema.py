@@ -1,5 +1,7 @@
 import graphene
 import pandas as pd
+import re
+
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.core.exceptions import PermissionDenied
@@ -7,6 +9,7 @@ from django.core.exceptions import PermissionDenied
 from core.gql.export_mixin import ExportableQueryMixin
 
 from django.utils.translation import gettext as _
+from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
 from core.utils import append_validity_filter
@@ -40,6 +43,7 @@ def patch_details(beneficiary_df: pd.DataFrame):
     df_final = df_final.drop('json_ext', axis=1)
     return df_final
 
+
 class Query(ExportableQueryMixin, graphene.ObjectType):
     export_patches = {
         'beneficiary': [
@@ -50,6 +54,8 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         ]
     }
     exportable_fields = ['beneficiary', 'group_beneficiary']
+    module_name = "social_protection"
+    object_type = "BenefitPlan"
 
     benefit_plan = OrderedDjangoFilterConnectionField(
         BenefitPlanGQLType,
@@ -57,10 +63,22 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
         applyDefaultValidityFilter=graphene.Boolean(),
-        client_mutation_id=graphene.String()
+        client_mutation_id=graphene.String(),
+        individual_id=graphene.String(),
+        group_id=graphene.String(),
+        beneficiary_status=graphene.String(),
     )
     beneficiary = OrderedDjangoFilterConnectionField(
         BeneficiaryGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        dateValidFrom__Gte=graphene.DateTime(),
+        dateValidTo__Lte=graphene.DateTime(),
+        applyDefaultValidityFilter=graphene.Boolean(),
+        client_mutation_id=graphene.String(),
+        customFilters=graphene.List(of_type=graphene.String),
+    )
+    group_beneficiary = OrderedDjangoFilterConnectionField(
+        GroupBeneficiaryGQLType,
         orderBy=graphene.List(of_type=graphene.String),
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
@@ -125,6 +143,18 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         if client_mutation_id:
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
 
+        individual_id = kwargs.get("individual_id", None)
+        if individual_id:
+            filters.append(Q(beneficiary__individual__id=individual_id))
+
+        group_id = kwargs.get("group_id", None)
+        if group_id:
+            filters.append(Q(groupbeneficiary__group__id=group_id))
+
+        beneficiary_status = kwargs.get("beneficiary_status", None)
+        if beneficiary_status:
+            filters.append(Q(beneficiary__status=beneficiary_status) | Q(groupbeneficiary__status=beneficiary_status))
+
         Query._check_permissions(
             info.context.user,
             SocialProtectionConfig.gql_benefit_plan_search_perms
@@ -144,6 +174,15 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             SocialProtectionConfig.gql_beneficiary_search_perms
         )
         query = Beneficiary.objects.filter(*filters)
+
+        custom_filters = kwargs.get("customFilters", None)
+        if custom_filters:
+            query = CustomFilterWizardStorage.build_custom_filters_queryset(
+                Query.module_name,
+                Query.object_type,
+                custom_filters,
+                query
+            )
         return gql_optimizer.query(query, info)
 
     def resolve_group_beneficiary(self, info, **kwargs):

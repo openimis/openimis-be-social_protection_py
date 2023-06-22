@@ -1,6 +1,8 @@
 import logging
+import re
 
 from collections import namedtuple
+from django.db.models.query import QuerySet
 from typing import List
 
 from core.custom_filters import CustomFilterWizardInterface
@@ -30,8 +32,8 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         This method retrieves the definition of how to create filters and returns it as a list of named tuples.
         Each named tuple is built with the provided `tuple_type` and has the fields `field`, `filter`, and `value`.
 
-        Example named tuple: <Type>(field=<str>, filter=<str>, value=<str>)
-        Example usage: BenefitPlan(field='income', filter='lt, gte, icontains, exact', value='')
+        Example named tuple: <Type>(field=<str>, filter=<str>, type=<str>)
+        Example usage: BenefitPlan(field='income', filter='lt, gte, icontains, exact', type='integer')
 
         :param tuple_type: The type of the named tuple.
         :type tuple_type: type
@@ -43,6 +45,28 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).get()
         list_of_tuple_with_definitions = self.__process_schema_and_build_tuple(benefit_plan, tuple_type)
         return list_of_tuple_with_definitions
+
+    def apply_filter_to_queryset(self, custom_filters: List[namedtuple], query: QuerySet, relation=None) -> QuerySet:
+        """
+        Apply custom filters to a queryset.
+
+        :param custom_filters: Structure of custom filter tuple: <Type>(field=<str>, filter=<str>, type=<str>).
+        Example usage of filter tuple: BenefitPlan(field='income', filter='lt, gte, icontains, exact', type='integer')
+
+        :param query: The original queryset with filters for example: Queryset[Beneficiary].
+
+        :param relation: The optional argument which defines the related field in queryset for example 'beneficiary'
+        :type relation: str or None
+
+        :return: The updated queryset with additional filters applied for example: Queryset[Beneficiary].
+        """
+        for filter_part in custom_filters:
+            field, value = filter_part.split('=')
+            field, value_type = field.rsplit('__', 1)
+            value = self.__cast_value(value, value_type)
+            filter_kwargs = {f"{relation}__json_ext__{field}" if relation else f"json_ext__{field}": value}
+            query = query.filter(**filter_kwargs)
+        return query
 
     def __process_schema_and_build_tuple(
         self,
@@ -65,3 +89,33 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
                            'on the provided schema due to either empty schema '
                            'or missing properties in schema file')
         return tuples_with_definitions
+
+    def __cast_value(self, value: str, value_type: str):
+        if value_type == 'integer':
+            return int(value)
+        elif value_type == 'string':
+            return str(value[1:-1])
+        elif value_type == 'numeric':
+            return float(value)
+        elif value_type == 'boolean':
+            cleaned_value = self.__remove_unexpected_chars(value)
+            if cleaned_value.lower() == 'true':
+                return True
+            elif cleaned_value.lower() == 'false':
+                return False
+        elif value_type == 'date':
+            # Perform date parsing logic here
+            # Assuming you have a specific date format, you can use datetime.strptime
+            # Example: return datetime.strptime(value, '%Y-%m-%d').date()
+            pass
+
+        # Return None if the value type is not recognized
+        return None
+
+    def __remove_unexpected_chars(self, string: str):
+        pattern = r'[^\w\s]'  # Remove any character that is not alphanumeric or whitespace
+
+        # Use re.sub() to remove the unwanted characters
+        cleaned_string = re.sub(pattern, '', string)
+
+        return cleaned_string
