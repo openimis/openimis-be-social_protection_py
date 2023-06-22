@@ -21,7 +21,7 @@ def import_beneficiaries(request):
 
         result = BeneficiaryImportService(user).import_beneficiaries(import_file, benefit_plan, workflow)
         if not result.get('success'):
-            raise ValueError(f'{result.get("message")}: {result.get("details")}')
+            raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
 
         return Response(result)
     except ValueError as e:
@@ -49,19 +49,19 @@ def _resolve_import_beneficiaries_args(request):
 
     result = WorkflowService.get_workflows(workflow_name, workflow_group)
     if not result.get('success'):
-        raise ValueError(f'{result.get("message")}: {result.get("details")}')
+        raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
 
     workflows = result.get('data', {}).get('workflows')
 
     if not workflows:
-        raise ValueError(f'Workflow not found: group={workflow_group} name={workflow_name}')
+        raise ValueError('Workflow not found: group={} name={}'.format(workflow_group, workflow_name))
     if len(workflows) > 1:
-        raise ValueError(f'Multiple workflows found: group={workflow_group} name={workflow_name}')
+        raise ValueError('Multiple workflows found: group={} name={}'.format(workflow_group, workflow_name))
 
     workflow = workflows[0]
     benefit_plan = BenefitPlan.objects.filter(uuid=benefit_plan_uuid).first()
 
     if not benefit_plan:
-        raise ValueError(f'Benefit Plan not found: {benefit_plan_uuid}')
+        raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
 
     return import_file, workflow, benefit_plan
