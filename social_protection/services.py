@@ -16,6 +16,7 @@ from social_protection.validation import (
     BenefitPlanValidation, GroupBeneficiaryValidation
 )
 from workflow.systems.base import WorkflowHandler
+from core.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -80,19 +81,20 @@ class GroupBeneficiaryService(BaseService):
 class BeneficiaryImportService:
     import_loaders = {
         # .csv
-        'text/csv': lambda f: pd.read_csv(f, dtype=str),
+        'text/csv': lambda f: pd.read_csv(f),
         # .xlsx
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': lambda f: pd.read_excel(f, dtype=str),
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': lambda f: pd.read_excel(f),
         # .xls
-        'application/vnd.ms-excel': lambda f: pd.read_excel(f, dtype=str),
+        'application/vnd.ms-excel': lambda f: pd.read_excel(f),
         # .ods
-        'application/vnd.oasis.opendocument.spreadsheet': lambda f: pd.read_excel(f, dtype=str),
+        'application/vnd.oasis.opendocument.spreadsheet': lambda f: pd.read_excel(f),
     }
 
     def __init__(self, user):
         super().__init__()
         self.user = user
 
+    @transaction.atomic
     def import_beneficiaries(self,
                              import_file: InMemoryUploadedFile,
                              benefit_plan: BenefitPlan,
@@ -133,7 +135,8 @@ class BeneficiaryImportService:
                           upload: IndividualDataSourceUpload,
                           benefit_plan: BenefitPlan):
         workflow.run({
-            'user_uuid': str(self.user.uuid),
+            # Core user UUID required
+            'user_uuid': str(User.objects.get(username=self.user.login_name).id),
             'benefit_plan_uuid': str(benefit_plan.uuid),
             'upload_uuid': str(upload.uuid)
         })
