@@ -137,3 +137,5 @@ class BeneficiaryImportService:
             'benefit_plan_uuid': str(benefit_plan.uuid),
             'upload_uuid': str(upload.uuid)
         })
+        upload.status = IndividualDataSourceUpload.Status.TRIGGERED
+        upload.save(username=self.user.login_name)
