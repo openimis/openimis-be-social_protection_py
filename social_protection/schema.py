@@ -85,14 +85,6 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         applyDefaultValidityFilter=graphene.Boolean(),
         client_mutation_id=graphene.String()
     )
-    group_beneficiary = OrderedDjangoFilterConnectionField(
-        GroupBeneficiaryGQLType,
-        orderBy=graphene.List(of_type=graphene.String),
-        dateValidFrom__Gte=graphene.DateTime(),
-        dateValidTo__Lte=graphene.DateTime(),
-        applyDefaultValidityFilter=graphene.Boolean(),
-        client_mutation_id=graphene.String()
-    )
     bf_code_validity = graphene.Field(
         ValidationMessageGQLType,
         bf_code=graphene.String(required=True),

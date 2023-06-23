@@ -38,9 +38,6 @@ class CreateBenefitPlanInputType(OpenIMISMutation.Input):
     def resolve_type(self, info):
         return self.type
 
-    def resolve_type(self, info):
-        return self.type
-
 
 class UpdateBenefitPlanInputType(CreateBenefitPlanInputType):
     id = graphene.UUID(required=True)
