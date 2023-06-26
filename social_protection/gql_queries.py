@@ -3,8 +3,9 @@ from graphene_django import DjangoObjectType
 
 from core import prefix_filterset, ExtendedConnection
 from policyholder.gql import PolicyHolderGQLType
-from individual.gql_queries import IndividualGQLType, GroupGQLType
-from social_protection.models import Beneficiary, BenefitPlan, GroupBeneficiary
+from individual.gql_queries import IndividualGQLType, GroupGQLType, IndividualDataSourceGQLType, \
+    IndividualDataSourceUploadGQLType
+from social_protection.models import Beneficiary, BenefitPlan, GroupBeneficiary, BenefitPlanDataUploadRecords
 
 
 class BenefitPlanGQLType(DjangoObjectType):
@@ -69,5 +70,24 @@ class GroupBeneficiaryGQLType(DjangoObjectType):
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
             "is_deleted": ["exact"],
             "version": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+
+class BenefitPlanDataUploadQGLType(DjangoObjectType):
+    uuid = graphene.String(source='uuid')
+
+    class Meta:
+        model = BenefitPlanDataUploadRecords
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "date_created": ["exact", "lt", "lte", "gt", "gte"],
+            "date_updated": ["exact", "lt", "lte", "gt", "gte"],
+            "is_deleted": ["exact"],
+            "version": ["exact"],
+            "workflow": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            **prefix_filterset("data_upload__", IndividualDataSourceUploadGQLType._meta.filter_fields),
+            **prefix_filterset("benefit_plan__", BenefitPlanGQLType._meta.filter_fields),
         }
         connection_class = ExtendedConnection

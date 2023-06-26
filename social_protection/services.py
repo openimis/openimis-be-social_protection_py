@@ -95,6 +95,7 @@ class BeneficiaryImportService:
         self.user = user
 
     @transaction.atomic
+    @register_service_signal('benefit_plan.import_beneficiaries')
     def import_beneficiaries(self,
                              import_file: InMemoryUploadedFile,
                              benefit_plan: BenefitPlan,

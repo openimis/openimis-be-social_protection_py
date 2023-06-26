@@ -3,7 +3,7 @@ from django.utils.translation import gettext as _
 from pydantic.error_wrappers import ValidationError
 
 from core import models as core_models
-from individual.models import Individual, Group
+from individual.models import Individual, Group, IndividualDataSourceUpload
 from policyholder.models import PolicyHolder
 
 
@@ -45,6 +45,12 @@ class Beneficiary(core_models.HistoryBusinessModel):
             raise ValidationError(_("Beneficiary must be associated with an individual benefit plan."))
 
         super().clean()
+
+
+class BenefitPlanDataUploadRecords(core_models.HistoryModel):
+    data_upload = models.ForeignKey(IndividualDataSourceUpload, models.DO_NOTHING, null=False)
+    benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
+    workflow = models.CharField(max_length=50)
 
 
 class GroupBeneficiary(core_models.HistoryBusinessModel):

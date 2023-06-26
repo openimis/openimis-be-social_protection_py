@@ -25,11 +25,11 @@ from social_protection.gql_mutations import (
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
-    BeneficiaryGQLType, GroupBeneficiaryGQLType
+    BeneficiaryGQLType, GroupBeneficiaryGQLType, BenefitPlanDataUploadQGLType
 )
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary, GroupBeneficiary
+    Beneficiary, GroupBeneficiary, BenefitPlanDataUploadRecords
 )
 from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name, validate_json_schema
 import graphene_django_optimizer as gql_optimizer
@@ -85,6 +85,16 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         applyDefaultValidityFilter=graphene.Boolean(),
         client_mutation_id=graphene.String()
     )
+
+    beneficiary_data_upload_history = OrderedDjangoFilterConnectionField(
+        BenefitPlanDataUploadQGLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        dateValidFrom__Gte=graphene.DateTime(),
+        dateValidTo__Lte=graphene.DateTime(),
+        applyDefaultValidityFilter=graphene.Boolean(),
+        client_mutation_id=graphene.String()
+    )
+
     bf_code_validity = graphene.Field(
         ValidationMessageGQLType,
         bf_code=graphene.String(required=True),
@@ -189,6 +199,20 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             SocialProtectionConfig.gql_beneficiary_search_perms
         )
         query = GroupBeneficiary.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
+    def resolve_beneficiary_data_upload_history(self, info, **kwargs):
+        filters = append_validity_filter(**kwargs)
+
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_beneficiary_search_perms
+        )
+        query = BenefitPlanDataUploadRecords.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
     @staticmethod
