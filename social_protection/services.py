@@ -62,8 +62,8 @@ class BenefitPlanService(BaseService):
 
     @staticmethod
     def _adjust_update_task_data(obj_data):
-        obj_data.pop('date_valid_from')
-        obj_data.pop('date_valid_to')
+        obj_data['date_valid_from'] = str(obj_data['date_valid_from'])
+        obj_data['date_valid_to'] = str(obj_data['date_valid_to'])
         obj_data['id'] = str(obj_data['id'])
         return obj_data
 
