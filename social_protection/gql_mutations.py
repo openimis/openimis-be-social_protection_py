@@ -131,10 +131,12 @@ class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
             data.pop('client_mutation_label')
 
         service = BenefitPlanService(user)
-        res = service.update(data)
-        if not res['success']:
-            return res
-        return None
+        if SocialProtectionConfig.check_benefit_plan_update:
+            res = service.create_update_task(data)
+        else:
+            res = service.update(data)
+
+        return res if not res['success'] else None
 
     class Input(UpdateBenefitPlanInputType):
         pass
