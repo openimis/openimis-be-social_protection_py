@@ -1,10 +1,13 @@
+import copy
 import logging
 
 import pandas as pd
+from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
 
 from core.services import BaseService
+from core.services.utils import output_exception
 from core.signals import register_service_signal
 from individual.models import IndividualDataSourceUpload, IndividualDataSource
 from social_protection.models import (
@@ -15,6 +18,7 @@ from social_protection.validation import (
     BeneficiaryValidation,
     BenefitPlanValidation, GroupBeneficiaryValidation
 )
+from tasks_management.services import TaskService
 from workflow.systems.base import WorkflowHandler
 from core.models import User
 
@@ -38,6 +42,30 @@ class BenefitPlanService(BaseService):
     @register_service_signal('benefit_plan_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
+
+    def create_update_task(self, obj_data):
+        try:
+            with transaction.atomic():
+                task_service = TaskService(self.user)
+                obj = self.OBJECT_TYPE.objects.get(id=obj_data['id'])
+                task_data = {
+                    'source': 'Benefit Plan Update',
+                    'entity_id': obj.id,
+                    'entity_type': ContentType.objects.get_for_model(self.OBJECT_TYPE),
+                    'executor_action_event': 'benefit_plan_update',
+                    'business_event': 'benefit_plan_update',
+                    'data': self._adjust_update_task_data(copy.deepcopy(obj_data))
+                }
+                return task_service.create(task_data)
+        except Exception as exc:
+            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="create update task", exception=exc)
+
+    @staticmethod
+    def _adjust_update_task_data(obj_data):
+        obj_data['date_valid_from'] = str(obj_data['date_valid_from'])
+        obj_data['date_valid_to'] = str(obj_data['date_valid_to'])
+        obj_data['id'] = str(obj_data['id'])
+        return obj_data
 
 
 class BeneficiaryService(BaseService):

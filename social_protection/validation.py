@@ -49,7 +49,7 @@ def validate_benefit_plan(data, uuid=None):
 
 def validate_bf_unique_code(code, uuid=None):
     instance = BenefitPlan.objects.filter(code=code, is_deleted=False).first()
-    if instance and instance.uuid != uuid:
+    if instance and str(instance.uuid) != uuid:
         return [{"message": _("social_protection.validation.benefit_plan.code_exists" % {
             'code': code
         })}]
@@ -58,7 +58,7 @@ def validate_bf_unique_code(code, uuid=None):
 
 def validate_bf_unique_name(name, uuid=None):
     instance = BenefitPlan.objects.filter(name=name, is_deleted=False).first()
-    if instance and instance.uuid != uuid:
+    if instance and str(instance.uuid) != uuid:
         return [{"message": _("social_protection.validation.benefit_plan.name_exists" % {
             'name': name
         })}]
