@@ -67,6 +67,7 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         individual_id=graphene.String(),
         group_id=graphene.String(),
         beneficiary_status=graphene.String(),
+        search=graphene.String(),
     )
     beneficiary = OrderedDjangoFilterConnectionField(
         BeneficiaryGQLType,
@@ -156,6 +157,11 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         beneficiary_status = kwargs.get("beneficiary_status", None)
         if beneficiary_status:
             filters.append(Q(beneficiary__status=beneficiary_status) | Q(groupbeneficiary__status=beneficiary_status))
+
+        search = kwargs.get("search", None)
+        if search:
+            filters.append(Q(name__icontains=search) |
+                           Q(code__icontains=search))
 
         Query._check_permissions(
             info.context.user,
