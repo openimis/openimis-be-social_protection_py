@@ -158,11 +158,6 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         if beneficiary_status:
             filters.append(Q(beneficiary__status=beneficiary_status) | Q(groupbeneficiary__status=beneficiary_status))
 
-        search = kwargs.get("search", None)
-        if search:
-            filters.append(Q(name__icontains=search) |
-                           Q(code__icontains=search))
-
         Query._check_permissions(
             info.context.user,
             SocialProtectionConfig.gql_benefit_plan_search_perms
