@@ -1,4 +1,4 @@
-name: Automated CI testing
+name: [POSTGRES] Automated CI testing
 # This workflow run automatically for every commit on github it checks the syntax and launch the tests.
 # | grep . | uniq -c filters out empty lines and then groups consecutive lines together with the number of occurrences
 on:
@@ -79,3 +79,4 @@ jobs:
           #DEV_SERVER: true
           SITE_ROOT: api
           REMOTE_USER_AUTHENTICATION: True
+          DB_ENGINE: django.db.backends.postgresql
