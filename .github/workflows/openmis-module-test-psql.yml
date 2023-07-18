@@ -19,7 +19,6 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: IMIS
           POSTGRES_USER: postgres
-          INIT_MODE: demo
         ports:
           - 1433:5432
         options: >-
@@ -63,6 +62,7 @@ jobs:
         run: |
           export MODULE_NAME="$(echo $GITHUB_REPOSITORY | sed 's#^openimis/openimis-be-\(.*\)_py$#\1#')"
           python manage.py migrate
+          python manage.py showmigrations
           python init_test_db.py | grep . | uniq -c
           python manage.py test --keep $MODULE_NAME
         env:
