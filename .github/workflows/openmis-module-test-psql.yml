@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-20.04
     services:
       psql:
-        image: ghcr.io/openimis/openimis-pgsql:latest
+        image: ghcr.io/openimis/openimis-pgsql:develop
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: IMIS
