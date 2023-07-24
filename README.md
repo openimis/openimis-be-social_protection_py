@@ -3,10 +3,10 @@ This repository holds the files of the openIMIS Backend social_protection refere
 It is dedicated to be deployed as a module of [openimis-be_py](https://github.com/openimis/openimis-be_py).
 
 ## ORM mapping:
-* tblBenefitPlan > BenefitPlan
-* Beneficiary
-* BenefitPlanDataUploadRecords
-* GroupBeneficiary
+* social_protection_benefitplan, social_protection_historicalbenefitplan > BenefitPlan
+* social_protection_beneficiary, social_protection_historicalbeneficiary > Beneficiary
+* social_protection_benefitplandatauploadsrecords, social_protection_historicalbenefitplandatauploadsrecords > BenefitPlanDataUploadRecords
+* social_protection_groupbeneficiary, social_protection_historicalgroupbeneficiary > GroupBeneficiary
 
 ## GraphQl Queries
 * benefitPlan
