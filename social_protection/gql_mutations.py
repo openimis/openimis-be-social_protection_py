@@ -50,7 +50,7 @@ class CreateGenericBeneficiaryInputType(OpenIMISMutation.Input):
         GRADUATED = BeneficiaryStatus.GRADUATED
         SUSPENDED = BeneficiaryStatus.SUSPENDED
 
-    status = graphene.Field(BeneficiaryStatusEnum)
+    status = graphene.Field(BeneficiaryStatusEnum, required=True)
     benefit_plan_id = graphene.UUID(required=False)
 
     date_valid_from = graphene.Date(required=False)
