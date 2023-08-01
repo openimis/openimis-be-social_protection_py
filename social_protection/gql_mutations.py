@@ -17,6 +17,11 @@ from social_protection.services import (
 )
 
 
+def check_perms_for_field(user, permission, data, field_string):
+    if data.get(field_string, None) and not user.has_perms(permission):
+        raise ValidationError("mutation.lack_of_schema_perms")
+
+
 class CreateBenefitPlanInputType(OpenIMISMutation.Input):
     class BenefitPlanTypeEnum(graphene.Enum):
         INDIVIDUAL = BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE
@@ -91,6 +96,12 @@ class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
         if type(user) is AnonymousUser or not user.has_perms(
                 SocialProtectionConfig.gql_benefit_plan_create_perms):
             raise ValidationError("mutation.authentication_required")
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_create_perms, data, 'beneficiary_data_schema'
+        )
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_create_perms, data, 'json_ext'
+        )
 
     @classmethod
     def _mutate(cls, user, **data):
@@ -120,6 +131,12 @@ class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
         if type(user) is AnonymousUser or not user.has_perms(
                 SocialProtectionConfig.gql_benefit_plan_update_perms):
             raise ValidationError("mutation.authentication_required")
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_update_perms, data, 'beneficiary_data_schema'
+        )
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_update_perms, data, 'json_ext'
+        )
 
     @classmethod
     def _mutate(cls, user, **data):
@@ -182,6 +199,9 @@ class CreateBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
         if type(user) is AnonymousUser or not user.has_perms(
                 SocialProtectionConfig.gql_beneficiary_create_perms):
             raise ValidationError("mutation.authentication_required")
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_create_perms, data, 'json_ext'
+        )
 
     @classmethod
     def _mutate(cls, user, **data):
@@ -208,6 +228,9 @@ class UpdateBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
         if type(user) is AnonymousUser or not user.has_perms(
                 SocialProtectionConfig.gql_beneficiary_update_perms):
             raise ValidationError("mutation.authentication_required")
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_update_perms, data, 'json_ext'
+        )
 
     @classmethod
     def _mutate(cls, user, **data):
@@ -265,6 +288,9 @@ class CreateGroupBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMu
         if type(user) is AnonymousUser or not user.has_perms(
                 SocialProtectionConfig.gql_beneficiary_create_perms):
             raise ValidationError("mutation.authentication_required")
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_create_perms, data, 'json_ext'
+        )
 
     @classmethod
     def _mutate(cls, user, **data):
@@ -291,6 +317,9 @@ class UpdateGroupBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMu
         if type(user) is AnonymousUser or not user.has_perms(
                 SocialProtectionConfig.gql_beneficiary_update_perms):
             raise ValidationError("mutation.authentication_required")
+        check_perms_for_field(
+            user, SocialProtectionConfig.gql_schema_update_perms, data, 'json_ext'
+        )
 
     @classmethod
     def _mutate(cls, user, **data):

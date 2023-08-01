@@ -12,6 +12,10 @@ DEFAULT_CONFIG = {
     "gql_beneficiary_create_perms": ["170002"],
     "gql_beneficiary_update_perms": ["170003"],
     "gql_beneficiary_delete_perms": ["170004"],
+    "gql_schema_search_perms": ["171001"],
+    "gql_schema_create_perms": ["171002"],
+    "gql_schema_update_perms": ["171003"],
+    "gql_schema_delete_perms": ["171004"],
 
     # Create update task for benefit plan instead of performing it
     "check_benefit_plan_update": True,
@@ -30,6 +34,10 @@ class SocialProtectionConfig(AppConfig):
     gql_beneficiary_create_perms = None
     gql_beneficiary_update_perms = None
     gql_beneficiary_delete_perms = None
+    gql_schema_search_perms = None
+    gql_schema_create_perms = None
+    gql_schema_update_perms = None
+    gql_schema_delete_perms = None
 
     check_benefit_plan_update = None
 

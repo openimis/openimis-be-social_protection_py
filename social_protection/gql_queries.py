@@ -1,14 +1,27 @@
 import graphene
+from django.contrib.auth.models import AnonymousUser
 from graphene_django import DjangoObjectType
 
 from core import prefix_filterset, ExtendedConnection
 from policyholder.gql import PolicyHolderGQLType
-from individual.gql_queries import IndividualGQLType, GroupGQLType, IndividualDataSourceGQLType, \
+from individual.gql_queries import IndividualGQLType, GroupGQLType, \
     IndividualDataSourceUploadGQLType
+from social_protection.apps import SocialProtectionConfig
 from social_protection.models import Beneficiary, BenefitPlan, GroupBeneficiary, BenefitPlanDataUploadRecords
 
 
-class BenefitPlanGQLType(DjangoObjectType):
+def _check_permissions(user, permission):
+    if type(user) is AnonymousUser or not user.id or not user.has_perms(permission):
+        raise PermissionError("Unauthorized")
+
+
+class JsonExtMixin:
+    def resolve_json_ext(self, info):
+        _check_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms)
+        return self.json_ext
+
+
+class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
 
     class Meta:
@@ -31,8 +44,12 @@ class BenefitPlanGQLType(DjangoObjectType):
         }
         connection_class = ExtendedConnection
 
+    def resolve_beneficiary_data_schema(self, info):
+        _check_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms)
+        return self.beneficiary_data_schema
 
-class BeneficiaryGQLType(DjangoObjectType):
+
+class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
 
     class Meta:
@@ -53,7 +70,7 @@ class BeneficiaryGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
 
-class GroupBeneficiaryGQLType(DjangoObjectType):
+class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
 
     class Meta:
@@ -74,7 +91,7 @@ class GroupBeneficiaryGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
 
-class BenefitPlanDataUploadQGLType(DjangoObjectType):
+class BenefitPlanDataUploadQGLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
 
     class Meta:
