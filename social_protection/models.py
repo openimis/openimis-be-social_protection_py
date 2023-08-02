@@ -1,3 +1,4 @@
+from django.contrib.auth.models import AnonymousUser
 from django.db import models
 from django.utils.translation import gettext as _
 from pydantic.error_wrappers import ValidationError
