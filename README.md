@@ -63,5 +63,4 @@ It is dedicated to be deployed as a module of [openimis-be_py](https://github.co
 
 ## openIMIS Modules Dependencies
 - core
-- policyholder
 - individual

@@ -5,7 +5,6 @@ from pydantic.error_wrappers import ValidationError
 
 from core import models as core_models
 from individual.models import Individual, Group, IndividualDataSourceUpload
-from policyholder.models import PolicyHolder
 
 
 class BeneficiaryStatus(models.TextChoices):
