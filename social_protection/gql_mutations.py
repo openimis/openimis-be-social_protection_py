@@ -31,7 +31,7 @@ class CreateBenefitPlanInputType(OpenIMISMutation.Input):
     name = graphene.String(required=True, max_length=255)
     max_beneficiaries = graphene.Int(default_value=0)
     ceiling_per_beneficiary = graphene.Decimal(max_digits=18, decimal_places=2, required=False)
-    holder_id = graphene.UUID(required=False)
+    institution = graphene.String(required=False, max_length=255)
     beneficiary_data_schema = graphene.types.json.JSONString(required=False)
     type = graphene.Field(BenefitPlanTypeEnum, required=True)
 

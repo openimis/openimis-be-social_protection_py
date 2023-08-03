@@ -3,7 +3,6 @@ from django.contrib.auth.models import AnonymousUser
 from graphene_django import DjangoObjectType
 
 from core import prefix_filterset, ExtendedConnection
-from policyholder.gql import PolicyHolderGQLType
 from individual.gql_queries import IndividualGQLType, GroupGQLType, \
     IndividualDataSourceUploadGQLType
 from social_protection.apps import SocialProtectionConfig
@@ -34,7 +33,7 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
             "max_beneficiaries": ["exact", "lt", "lte", "gt", "gte"],
-            **prefix_filterset("holder__", PolicyHolderGQLType._meta.filter_fields),
+            "institution": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
 
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
