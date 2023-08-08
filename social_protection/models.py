@@ -5,7 +5,6 @@ from pydantic.error_wrappers import ValidationError
 
 from core import models as core_models
 from individual.models import Individual, Group, IndividualDataSourceUpload
-from policyholder.models import PolicyHolder
 
 
 class BeneficiaryStatus(models.TextChoices):
@@ -26,7 +25,7 @@ class BenefitPlan(core_models.HistoryBusinessModel):
     ceiling_per_beneficiary = models.DecimalField(
         max_digits=18, decimal_places=2, blank=True, null=True,
     )
-    holder = models.ForeignKey(PolicyHolder, models.DO_NOTHING, blank=True, null=True)
+    institution = models.CharField(max_length=255, null=True, blank=True)
     beneficiary_data_schema = models.JSONField(null=True, blank=True)
     type = models.CharField(
         max_length=100, choices=BenefitPlanType.choices, default=BenefitPlanType.INDIVIDUAL_TYPE, null=False
