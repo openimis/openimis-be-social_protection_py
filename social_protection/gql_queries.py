@@ -9,15 +9,15 @@ from social_protection.apps import SocialProtectionConfig
 from social_protection.models import Beneficiary, BenefitPlan, GroupBeneficiary, BenefitPlanDataUploadRecords
 
 
-def _check_permissions(user, permission):
-    if type(user) is AnonymousUser or not user.id or not user.has_perms(permission):
-        raise PermissionError("Unauthorized")
+def _have_permissions(user, permission):
+    return type(user) is AnonymousUser or not user.id or not user.has_perms(permission)
 
 
 class JsonExtMixin:
     def resolve_json_ext(self, info):
-        _check_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms)
-        return self.json_ext
+        if _have_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms):
+            return self.json_ext
+        return None
 
 
 class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
@@ -44,8 +44,9 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
         connection_class = ExtendedConnection
 
     def resolve_beneficiary_data_schema(self, info):
-        _check_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms)
-        return self.beneficiary_data_schema
+        if _have_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms):
+            return self.beneficiary_data_schema
+        return None
 
 
 class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
