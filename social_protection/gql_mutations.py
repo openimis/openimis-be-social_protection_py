@@ -178,16 +178,16 @@ class DeleteBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
             data.pop('client_mutation_label')
 
         service = BenefitPlanService(user)
-        res = {'success': False, 'message': 'No IDs to delete', 'details': ''}
         ids = data.get('ids')
-        if ids:
-            with transaction.atomic():
-                for obj_id in ids:
-                    res = service.delete({'id': obj_id})
-                    if not res['success']:
-                        transaction.rollback()
-                        break
-        return res if not res['success'] else None
+        if not ids:
+            return {'success': False, 'message': 'No IDs to delete', 'details': ''}
+
+        with transaction.atomic():
+            for obj_id in ids:
+                res = service.delete({'id': obj_id})
+                if not res['success']:
+                    transaction.rollback()
+                    return res
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
@@ -283,18 +283,18 @@ class DeleteBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         service = BeneficiaryService(user)
 
         ids = data.get('ids')
-        res = {'success': False, 'message': 'No IDs to delete', 'details': ''}
-        if ids:
-            with transaction.atomic():
-                for obj_id in ids:
-                    if SocialProtectionConfig.gql_check_beneficiary_crud:
-                        res = service.create_delete_task({'id': obj_id})
-                    else:
-                        res = service.delete({'id': obj_id})
-                    if not res['success']:
-                        transaction.rollback()
-                        break
-        return res if not res['success'] else None
+        if not ids:
+            return {'success': False, 'message': 'No IDs to delete', 'details': ''}
+
+        with transaction.atomic():
+            for obj_id in ids:
+                if SocialProtectionConfig.gql_check_beneficiary_crud:
+                    res = service.create_delete_task({'id': obj_id})
+                else:
+                    res = service.delete({'id': obj_id})
+                if not res['success']:
+                    transaction.rollback()
+                    return res
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
@@ -390,18 +390,18 @@ class DeleteGroupBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
         service = GroupBeneficiaryService(user)
 
         ids = data.get('ids')
-        res = {'success': False, 'message': 'No IDs to delete', 'details': ''}
-        if ids:
-            with transaction.atomic():
-                for obj_id in ids:
-                    if SocialProtectionConfig.gql_check_beneficiary_crud:
-                        res = service.create_delete_task({'id': obj_id})
-                    else:
-                        res = service.delete({'id': obj_id})
-                    if not res['success']:
-                        transaction.rollback()
-                        break
-        return res if not res['success'] else None
+        if not ids:
+            return {'success': False, 'message': 'No IDs to delete', 'details': ''}
+
+        with transaction.atomic():
+            for obj_id in ids:
+                if SocialProtectionConfig.gql_check_group_beneficiary_crud:
+                    res = service.create_delete_task({'id': obj_id})
+                else:
+                    res = service.delete({'id': obj_id})
+                if not res['success']:
+                    transaction.rollback()
+                    return res
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
