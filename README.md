@@ -58,7 +58,9 @@ It is dedicated to be deployed as a module of [openimis-be_py](https://github.co
 * gql_beneficiary_update_perms: required rights to call updateBeneficiary and updateGroupBeneficiary GraphQL Mutation (default: ["160003"])
 * gql_beneficiary_delete_perms: required rights to call deleteBeneficiary and deleteGroupBeneficiary GraphQL Mutation (default: ["170004"])
 
-* check_benefit_plan_update: specifies whether Benefit Plan update should be approved (default: True)
+* gql_check_benefit_plan_update: specifies whether Benefit Plan update should be updated using task based approval (default: True)
+* gql_check_beneficiary_crud: specifies whether Beneficiary CRUD should be use task based approval (default: True)
+* gql_check_group_beneficiary_crud: specifies whether Group Beneficiary should use tasks based approval (default: True),
 
 
 ## openIMIS Modules Dependencies

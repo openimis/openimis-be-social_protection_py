@@ -2,7 +2,6 @@ from django.apps import AppConfig
 
 from core.custom_filters import CustomFilterRegistryPoint
 
-
 DEFAULT_CONFIG = {
     "gql_benefit_plan_search_perms": ["160001"],
     "gql_benefit_plan_create_perms": ["160002"],
@@ -17,8 +16,10 @@ DEFAULT_CONFIG = {
     "gql_schema_update_perms": ["171003"],
     "gql_schema_delete_perms": ["171004"],
 
-    # Create update task for benefit plan instead of performing it
-    "check_benefit_plan_update": True,
+    # Create task for model instead of performing crud action
+    "gql_check_benefit_plan_update": True,
+    "gql_check_beneficiary_crud": True,
+    "gql_check_group_beneficiary_crud": True,
 }
 
 
@@ -39,7 +40,9 @@ class SocialProtectionConfig(AppConfig):
     gql_schema_update_perms = None
     gql_schema_delete_perms = None
 
-    check_benefit_plan_update = None
+    gql_check_benefit_plan_update = None
+    gql_check_beneficiary_crud = None
+    gql_check_group_beneficiary_crud = None
 
     def ready(self):
         from core.models import ModuleConfiguration
