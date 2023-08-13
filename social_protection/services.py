@@ -6,7 +6,7 @@ from django.db import transaction
 
 from core.services import BaseService
 from core.signals import register_service_signal
-from individual.models import IndividualDataSourceUpload, IndividualDataSource
+from individual.models import IndividualDataSourceUpload, IndividualDataSource, Individual
 from social_protection.models import (
     BenefitPlan,
     Beneficiary, GroupBeneficiary
@@ -58,6 +58,29 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
     @register_service_signal('beneficiary_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
+
+    def _data_for_json_ext(self, obj_data):
+        beneficiary = Beneficiary.objects.get(id=obj_data.get("id"))
+        individual = beneficiary.individual
+        benefit_plan = beneficiary.benefit_plan
+        individual_identity_string = f'{individual.first_name} {individual.last_name}'
+        json_ext_data = {"individual_identity": individual_identity_string,
+                         "benefit_plan_string": benefit_plan.__str__()}
+        return json_ext_data
+
+    def _data_for_json_ext_create(self, obj_data):
+        individual = Individual.objects.get(id=obj_data.get("individual_id"))
+        benefit_plan = BenefitPlan.objects.get(id=obj_data.get("individual_id"))
+        individual_identity_string = f'{individual.first_name} {individual.last_name}'
+        json_ext_data = {"individual_identity": individual_identity_string,
+                         "benefit_plan_string": benefit_plan.__str__()}
+        return json_ext_data
+
+    def _data_for_json_ext_update(self, obj_data):
+        return self._data_for_json_ext(obj_data)
+
+    def _data_for_json_ext_delete(self, obj_data):
+        return self._data_for_json_ext(obj_data)
 
 
 class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):

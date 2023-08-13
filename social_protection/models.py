@@ -32,6 +32,8 @@ class BenefitPlan(core_models.HistoryBusinessModel):
     )
     description = models.CharField(max_length=1024, null=True, blank=True)
 
+    def __str__(self):
+        return f'Benefit Plan {self.code}'
 
 class Beneficiary(core_models.HistoryBusinessModel):
     individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
@@ -43,8 +45,10 @@ class Beneficiary(core_models.HistoryBusinessModel):
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE:
             raise ValidationError(_("Beneficiary must be associated with an individual benefit plan."))
-
         super().clean()
+
+    def __str__(self):
+        return f'{self.individual.first_name} {self.individual.last_name}'
 
 
 class BenefitPlanDataUploadRecords(core_models.HistoryModel):
