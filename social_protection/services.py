@@ -59,7 +59,7 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
     def delete(self, obj_data):
         return super().delete(obj_data)
 
-    def _data_for_json_ext(self, obj_data):
+    def _data_for_json_ext_general(self, obj_data):
         beneficiary = Beneficiary.objects.get(id=obj_data.get("id"))
         individual = beneficiary.individual
         benefit_plan = beneficiary.benefit_plan
@@ -77,10 +77,10 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
         return json_ext_data
 
     def _data_for_json_ext_update(self, obj_data):
-        return self._data_for_json_ext(obj_data)
+        return self._data_for_json_ext_general(obj_data)
 
     def _data_for_json_ext_delete(self, obj_data):
-        return self._data_for_json_ext(obj_data)
+        return self._data_for_json_ext_general(obj_data)
 
 
 class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
