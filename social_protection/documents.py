@@ -47,9 +47,17 @@ if 'opensearch_reports' in apps.app_configs:
                 return related_instance.beneficiary_set.all()
 
         def prepare_json_ext(self, instance):
-            json_data = {}
             json_ext_data = instance.json_ext
-            if isinstance(json_ext_data, dict):
-                for key, value in json_ext_data.items():
-                    json_data[key] = value
+            json_data = self.__flatten_dict(json_ext_data)
             return json_data
+
+        def __flatten_dict(self, d, parent_key='', sep='__'):
+            items = {}
+            for k, v in d.items():
+                new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.update(self.__flatten_dict(v, new_key, sep=sep))
+                else:
+                    items[new_key] = v
+            return items
+
