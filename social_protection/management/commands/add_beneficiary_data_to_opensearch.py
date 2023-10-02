@@ -4,7 +4,11 @@ from social_protection.documents import BeneficiaryDocument
 
 
 class Command(BaseCommand):
-    help = 'Import beneficiary data into OpenSearch'
+    help = 'Imports beneficiary data from openIMIS into OpenSearch. ' \
+           'This command should be executed within the openimis-be_py module, which ' \
+           'is part of the openIMIS module, using the manage.py command. For example, you can run: ' \
+           'python manage.py add_beneficiary_data_to_opensearch. ' \
+           'This command creates or updates data documents at the OpenSearch level.'
 
     def handle(self, *args, **options):
         # Initialize the index
@@ -24,6 +28,8 @@ class Command(BaseCommand):
                 },
                 id=beneficiary.id,
                 status=beneficiary.status,
+                json_ext=beneficiary.json_ext,
+                date_created=str(beneficiary.date_created)
             )
             # Save the BeneficiaryDocument to index it in OpenSearch
             result = beneficiary_document.save()

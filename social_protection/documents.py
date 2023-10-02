@@ -21,6 +21,8 @@ if 'opensearch_reports' in apps.app_configs:
         status = opensearch_fields.KeywordField(fields={
             'status_key': opensearch_fields.KeywordField()}
         )
+        date_created = opensearch_fields.DateField()
+        json_ext = opensearch_fields.ObjectField()
 
         class Index:
             name = 'beneficiary'
@@ -34,7 +36,7 @@ if 'opensearch_reports' in apps.app_configs:
             model = Beneficiary
             related_models = [BenefitPlan, Individual]
             fields = [
-                'id',
+                'id'
             ]
             queryset_pagination = 5000
 
@@ -43,3 +45,11 @@ if 'opensearch_reports' in apps.app_configs:
                 return related_instance.beneficiary_set.all()
             elif isinstance(related_instance, Individual):
                 return related_instance.beneficiary_set.all()
+
+        def prepare_json_ext(self, instance):
+            json_data = {}
+            json_ext_data = instance.json_ext
+            if isinstance(json_ext_data, dict):
+                for key, value in json_ext_data.items():
+                    json_data[key] = value
+            return json_data
