@@ -66,3 +66,44 @@ It is dedicated to be deployed as a module of [openimis-be_py](https://github.co
 ## openIMIS Modules Dependencies
 - core
 - individual
+
+## OpenSearch
+
+### Available Documents 
+* BeneficiaryDocument
+
+### How to initlaize data after deployment
+* If you have initialized the application but still have some data to be transferred, you can effortlessly 
+achieve this by using the commands available in this module: `python manage.py add_beneficiary_data_to_opensearch`. 
+This command loads existing data into OpenSearch.
+
+### How to Import a Dashboard
+* Locate the dashboard definition file in `.ndjson` format within 
+the `openimis-be_social_protection/import_data` directory.
+* Log in to your OpenSearch instance.
+* Expand the sidebar located on the left side of the page.
+* Navigate to `Management` and select `Dashboards Management`.
+* On the left side of the page, click on `Saved Objects`.
+* At the top-right corner of the table, click on `Import`.
+* A new side-modal will appear on the right side of the page. 
+Drag and drop the file from `openimis-be_social_protection/import_data` into the import dropzone.
+* This action will import the dashboards along with related 
+charts that should be accessible on the visualization page.
+* Verify if the dashboards have been imported properly.
+
+### File for importing in .ndsjon format
+* This file contains dashboard definitions that can be easily uploaded, as described in the "How to Import a Dashboard" 
+section above. It includes definitions of dashboards and the visualizations contained within them.
+
+### How to Export Dashboards with Related Objects like Visualizations in OpenSearch?
+* Log in to your OpenSearch instance.
+* Expand the sidebar located on the left side of the page.
+* Navigate to `Management` and select `Dashboards Management`.
+* On the left side of the page, click on `Saved Objects`.
+* At the top-right corner of the table, click on `Export <N> objects`.
+* Ensure that you have selected dashboards only. Additionally, choose the option to 
+include related objects, and then click export all.
+* You should have downloaded file in `.ndjson` format. 
+* Save file in the business model for initialization after deployment in 
+`openimis-be_social_protection/import_data`.
+* Rename filename into `opensearch_beneficiary_dashboard.ndjson`
