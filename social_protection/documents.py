@@ -1,11 +1,11 @@
 from django.apps import apps
-from django_opensearch_dsl import Document, fields as opensearch_fields
-from django_opensearch_dsl.registries import registry
-from social_protection.models import Beneficiary, BenefitPlan
-from individual.models import Individual
 
 # Check if the 'opensearch_reports' app is in INSTALLED_APPS
 if 'opensearch_reports' in apps.app_configs:
+    from django_opensearch_dsl import Document, fields as opensearch_fields
+    from django_opensearch_dsl.registries import registry
+    from social_protection.models import Beneficiary, BenefitPlan
+    from individual.models import Individual
 
     @registry.register_document
     class BeneficiaryDocument(Document):
