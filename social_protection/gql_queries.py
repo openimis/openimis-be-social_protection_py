@@ -10,7 +10,11 @@ from social_protection.models import Beneficiary, BenefitPlan, GroupBeneficiary,
 
 
 def _have_permissions(user, permission):
-    return type(user) is AnonymousUser or not user.id or not user.has_perms(permission)
+    if isinstance(user, AnonymousUser):
+        return False
+    if not user.id:
+        return False
+    return user.has_perms(permission)
 
 
 class JsonExtMixin:
