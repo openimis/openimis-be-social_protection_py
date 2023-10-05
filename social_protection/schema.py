@@ -68,6 +68,7 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         group_id=graphene.String(),
         beneficiary_status=graphene.String(),
         search=graphene.String(),
+        sort_alphabetically=graphene.Boolean(),
     )
     beneficiary = OrderedDjangoFilterConnectionField(
         BeneficiaryGQLType,
@@ -170,7 +171,12 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             info.context.user,
             SocialProtectionConfig.gql_benefit_plan_search_perms
         )
+
         query = BenefitPlan.objects.filter(*filters)
+
+        sort_alphabetically = kwargs.get("sort_alphabetically", None)
+        if sort_alphabetically:
+            query = query.order_by('code')
         return gql_optimizer.query(query, info)
 
     def resolve_beneficiary(self, info, **kwargs):
