@@ -67,6 +67,8 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         individual_id=graphene.String(),
         group_id=graphene.String(),
         beneficiary_status=graphene.String(),
+        search=graphene.String(),
+        sort_alphabetically=graphene.Boolean(),
     )
     beneficiary = OrderedDjangoFilterConnectionField(
         BeneficiaryGQLType,
@@ -141,6 +143,14 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
     def resolve_benefit_plan(self, info, **kwargs):
         filters = append_validity_filter(**kwargs)
 
+        search = kwargs.get("search", None)
+        if search:
+            search_terms = search.split(' ')
+            search_queries = Q()
+            for term in search_terms:
+                search_queries |= Q(code__icontains=term) | Q(name__icontains=term)
+            filters.append(search_queries)
+
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
@@ -161,7 +171,12 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             info.context.user,
             SocialProtectionConfig.gql_benefit_plan_search_perms
         )
+
         query = BenefitPlan.objects.filter(*filters)
+
+        sort_alphabetically = kwargs.get("sort_alphabetically", None)
+        if sort_alphabetically:
+            query = query.order_by('code')
         return gql_optimizer.query(query, info)
 
     def resolve_beneficiary(self, info, **kwargs):

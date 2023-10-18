@@ -42,8 +42,14 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         :rtype: List[namedtuple]
         """
         benefit_plan_id = kwargs.get('uuid', None)
-        benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).get()
-        list_of_tuple_with_definitions = self.__process_schema_and_build_tuple(benefit_plan, tuple_type)
+        additional_params = kwargs.get('additional_params', None)
+        if benefit_plan_id:
+            benefit_plan_query = BenefitPlan.objects.filter(id=benefit_plan_id)
+        else:
+            benefit_plan_query = BenefitPlan.objects.filter(is_deleted=False, beneficiary_data_schema__isnull=False)
+            if additional_params and 'type' in additional_params:
+                benefit_plan_query = benefit_plan_query.filter(type=additional_params['type'])
+        list_of_tuple_with_definitions = self.__process_schema_and_build_tuple(benefit_plan_query, tuple_type)
         return list_of_tuple_with_definitions
 
     def apply_filter_to_queryset(self, custom_filters: List[namedtuple], query: QuerySet, relation=None) -> QuerySet:
@@ -69,25 +75,32 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         return query
 
     def __process_schema_and_build_tuple(
-        self,
-        benefit_plan: BenefitPlan,
-        tuple_type: type
+            self,
+            benefit_plan_query: QuerySet[BenefitPlan],
+            tuple_type: type
     ) -> List[namedtuple]:
         tuples_with_definitions = []
-        schema = benefit_plan.beneficiary_data_schema
-        if schema and 'properties' in schema:
-            properties = schema['properties']
-            for key, value in properties.items():
-                tuple_with_definition = tuple_type(
-                    field=key,
-                    filter=self.FILTERS_BASED_ON_FIELD_TYPE[value['type']],
-                    type=value['type']
-                )
-                tuples_with_definitions.append(tuple_with_definition)
-        else:
-            logger.warning('Cannot retrieve definitions of filters based '
-                           'on the provided schema due to either empty schema '
-                           'or missing properties in schema file')
+        existing_keys = set()
+
+        for benefit_plan in benefit_plan_query:
+            schema = benefit_plan.beneficiary_data_schema
+            if schema and 'properties' in schema:
+                properties = schema['properties']
+                for key, value in properties.items():
+                    if key not in existing_keys:
+                        tuple_with_definition = tuple_type(
+                            field=key,
+                            filter=self.FILTERS_BASED_ON_FIELD_TYPE[value['type']],
+                            type=value['type']
+                        )
+                        tuples_with_definitions.append(tuple_with_definition)
+                        existing_keys.add(key)
+
+            else:
+                logger.warning('Cannot retrieve definitions of filters based '
+                               'on the provided schema due to either empty schema '
+                               'or missing properties in schema file')
+
         return tuples_with_definitions
 
     def __cast_value(self, value: str, value_type: str):
