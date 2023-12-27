@@ -32,6 +32,26 @@ def import_beneficiaries(request):
         return Response({'success': False, 'error': str(e)}, status=500)
 
 
+@api_view(["GET"])
+@permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
+def validate_import_beneficiaries(request):
+    try:
+        user = request.user
+        import_file, _, benefit_plan = _resolve_import_beneficiaries_args(request)
+
+        result = BeneficiaryImportService(user).validate_import_beneficiaries(import_file, benefit_plan)
+        if not result.get('success'):
+            raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
+
+        return Response(result)
+    except ValueError as e:
+        logger.error("Error while validating individuals", exc_info=e)
+        return Response({'success': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        logger.error("Unexpected error while validating individuals", exc_info=e)
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+
 def _resolve_import_beneficiaries_args(request):
     import_file = request.FILES.get('file')
     benefit_plan_uuid = request.POST.get('benefit_plan')

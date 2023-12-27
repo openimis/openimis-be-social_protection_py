@@ -1,3 +1,4 @@
+import json
 import logging
 
 import pandas as pd
@@ -130,6 +131,53 @@ class BeneficiaryImportService:
         self._save_data_source(dataframe, upload)
         self._trigger_workflow(workflow, upload, benefit_plan)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
+
+    @register_service_signal('benefit_plan.validate_import_beneficiaries')
+    def validate_import_beneficiaries(self, import_file: InMemoryUploadedFile, benefit_plan: BenefitPlan):
+        dataframe = self._load_import_file(import_file)
+        self._validate_dataframe(dataframe)
+        dataframe_with_errors = self._validate_possible_beneficiaries(dataframe, benefit_plan)
+        return {'success': True, 'data': dataframe_with_errors}
+
+    def _validate_possible_beneficiaries(self, dataframe, benefit_plan):
+        existing_beneficiaries = Beneficiary.objects.filter(benefit_plan=benefit_plan)
+        schema_dict = json.loads(benefit_plan.beneficiary_data_schema)
+        properties = schema_dict.get("properties", {})
+
+        def validate_row(row):
+            validation_errors = {}
+
+            for field, field_properties in properties.items():
+                if "uniqueness" in field_properties:
+                    result = self._handle_uniqueness(row, field_properties["uniqueness"], existing_beneficiaries)
+                    if result:
+                        validation_errors[field] = result
+
+                if "validationCalculation" in field_properties:
+                    result = self._handle_validation_calculation(row, field_properties["validationCalculation"])
+                    if result:
+                        validation_errors[field] = result
+
+            return validation_errors
+
+        validation_results = dataframe.apply(validate_row, axis='columns')
+
+        for field in validation_results.columns:
+            dataframe[f"{field}_validation_error"] = validation_results[field]
+
+        return dataframe
+
+    def _handle_uniqueness(self, row, uniqueness_properties, beneficiaries):
+        # ValidationsCalculationRule choose strategy unique
+        return None
+
+    def _handle_validation_calculation(self, row, validation_calculation_properties):
+        validation_name = validation_calculation_properties.get("name")
+        if not validation_name:
+            raise ValueError("Missing validation name")
+
+        # ValidationsCalculationRule choose strategy based on name
+        return None
 
     def _create_upload_entry(self, filename):
         upload = IndividualDataSourceUpload(source_name=filename, source_type='beneficiary import')
