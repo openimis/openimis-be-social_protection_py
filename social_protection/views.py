@@ -43,6 +43,7 @@ def validate_import_beneficiaries(request):
         if not result.get('success'):
             raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
 
+        # for now just return info if df valid
         return Response(result)
     except ValueError as e:
         logger.error("Error while validating individuals", exc_info=e)

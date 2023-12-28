@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
+from pandas import DataFrame
 
 from core.services import BaseService
 from core.signals import register_service_signal
@@ -136,36 +137,28 @@ class BeneficiaryImportService:
     def validate_import_beneficiaries(self, import_file: InMemoryUploadedFile, benefit_plan: BenefitPlan):
         dataframe = self._load_import_file(import_file)
         self._validate_dataframe(dataframe)
-        dataframe_with_errors = self._validate_possible_beneficiaries(dataframe, benefit_plan)
-        return {'success': True, 'data': dataframe_with_errors}
+        validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan)
+        return {'success': True, 'data': {'is_valid': validated_dataframe.equals(dataframe)}}
 
-    def _validate_possible_beneficiaries(self, dataframe, benefit_plan):
+    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan) -> DataFrame:
         existing_beneficiaries = Beneficiary.objects.filter(benefit_plan=benefit_plan)
         schema_dict = json.loads(benefit_plan.beneficiary_data_schema)
         properties = schema_dict.get("properties", {})
 
         def validate_row(row):
-            validation_errors = {}
-
+            validated_row = row
             for field, field_properties in properties.items():
                 if "uniqueness" in field_properties:
-                    result = self._handle_uniqueness(row, field_properties["uniqueness"], existing_beneficiaries)
-                    if result:
-                        validation_errors[field] = result
+                    validated_row = self._handle_uniqueness(validated_row, field_properties["uniqueness"], existing_beneficiaries)
 
                 if "validationCalculation" in field_properties:
-                    result = self._handle_validation_calculation(row, field_properties["validationCalculation"])
-                    if result:
-                        validation_errors[field] = result
+                    validated_row = self._handle_validation_calculation(validated_row, field_properties["validationCalculation"])
 
-            return validation_errors
+            return validated_row
 
-        validation_results = dataframe.apply(validate_row, axis='columns')
+        validated_dataframe = dataframe.apply(validate_row, axis='columns')
 
-        for field in validation_results.columns:
-            dataframe[f"{field}_validation_error"] = validation_results[field]
-
-        return dataframe
+        return validated_dataframe
 
     def _handle_uniqueness(self, row, uniqueness_properties, beneficiaries):
         # ValidationsCalculationRule choose strategy unique
