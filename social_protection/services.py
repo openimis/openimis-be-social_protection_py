@@ -151,8 +151,7 @@ class BeneficiaryImportService:
             validated_row = row
             for field, field_properties in properties.items():
                 if "uniqueness" in field_properties:
-                    validated_row = self._handle_uniqueness(validated_row, field, field_properties["uniqueness"],
-                                                            existing_beneficiaries)
+                    validated_row = self._handle_uniqueness(validated_row, field, field_properties)
 
                 if "validationCalculation" in field_properties:
                     validated_row = self._handle_validation_calculation(validated_row, field, field_properties)
