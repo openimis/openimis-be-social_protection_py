@@ -20,6 +20,7 @@ DEFAULT_CONFIG = {
     "gql_check_benefit_plan_update": True,
     "gql_check_beneficiary_crud": True,
     "gql_check_group_beneficiary_crud": True,
+    "validation_calculation_uuid": "4362f958-5894-435b-9bda-df6cadf88352",
 }
 
 
@@ -43,6 +44,7 @@ class SocialProtectionConfig(AppConfig):
     gql_check_benefit_plan_update = None
     gql_check_beneficiary_crud = None
     gql_check_group_beneficiary_crud = None
+    validation_calculation_uuid = None
 
     def ready(self):
         from core.models import ModuleConfiguration

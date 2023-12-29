@@ -6,9 +6,11 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
 from pandas import DataFrame
 
+from calculation.services import get_calculation_object
 from core.services import BaseService
 from core.signals import register_service_signal
 from individual.models import IndividualDataSourceUpload, IndividualDataSource, Individual
+from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan,
     Beneficiary, GroupBeneficiary
@@ -149,10 +151,11 @@ class BeneficiaryImportService:
             validated_row = row
             for field, field_properties in properties.items():
                 if "uniqueness" in field_properties:
-                    validated_row = self._handle_uniqueness(validated_row, field_properties["uniqueness"], existing_beneficiaries)
+                    validated_row = self._handle_uniqueness(validated_row, field, field_properties["uniqueness"],
+                                                            existing_beneficiaries)
 
                 if "validationCalculation" in field_properties:
-                    validated_row = self._handle_validation_calculation(validated_row, field_properties["validationCalculation"])
+                    validated_row = self._handle_validation_calculation(validated_row, field, field_properties)
 
             return validated_row
 
@@ -160,17 +163,49 @@ class BeneficiaryImportService:
 
         return validated_dataframe
 
-    def _handle_uniqueness(self, row, uniqueness_properties, beneficiaries):
-        # ValidationsCalculationRule choose strategy unique
-        return None
+    def _handle_uniqueness(self, row, field, field_properties):
+        unique_class_validation = 'tmp'  # to be added when strategy for uniqueness will be added
 
-    def _handle_validation_calculation(self, row, validation_calculation_properties):
-        validation_name = validation_calculation_properties.get("name")
-        if not validation_name:
+        if field not in row:
+            raise ValueError("Missing column in row")
+
+        field_type = field_properties.get("type")
+        calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
+
+        calculation = get_calculation_object(calculation_uuid)
+
+        result_row = calculation.calculate_if_active_for_object(
+            unique_class_validation,
+            calculation_uuid,
+            row,
+            field_type,
+            row[field]
+        )
+        return result_row
+
+    def _handle_validation_calculation(self, row, field, field_properties):
+        validation_calculation = field_properties.get("validationCalculation", {}).get("name")
+
+        if not validation_calculation:
             raise ValueError("Missing validation name")
 
-        # ValidationsCalculationRule choose strategy based on name
-        return None
+        if field not in row:
+            raise ValueError("Missing column in row")
+
+        field_type = field_properties.get("type")
+        calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
+
+        calculation = get_calculation_object(calculation_uuid)
+
+        result_row = calculation.calculate_if_active_for_object(
+            validation_calculation,
+            calculation_uuid,
+            row,
+            field_type,
+            row[field]
+        )
+
+        return result_row
 
     def _create_upload_entry(self, filename):
         upload = IndividualDataSourceUpload(source_name=filename, source_type='beneficiary import')
