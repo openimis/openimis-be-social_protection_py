@@ -139,7 +139,7 @@ class BeneficiaryImportService:
     def validate_import_beneficiaries(self, import_file: InMemoryUploadedFile, benefit_plan: BenefitPlan):
         dataframe = self._load_import_file(import_file)
         self._validate_dataframe(dataframe)
-        validated_dataframe  = self._validate_possible_beneficiaries(dataframe, benefit_plan)
+        validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan)
         return {'success': True, 'data': validated_dataframe}
 
     def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan) -> DataFrame:
