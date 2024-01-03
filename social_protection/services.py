@@ -148,13 +148,16 @@ class BeneficiaryImportService:
         validated_dataframe = []
 
         def validate_row(row):
-            field_validation = {'row': row, 'validations': {}}
+            field_validation = {'row': row.to_dict(), 'validations': {}}
             for field, field_properties in properties.items():
                 if "uniqueness" in field_properties:
-                    field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(row, field, field_properties, benefit_plan)
-
+                    field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
+                        row, field, field_properties, benefit_plan, dataframe
+                    )
                 if "validationCalculation" in field_properties:
-                    field_validation['validations'][f'{field}'] = self._handle_validation_calculation(row, field, field_properties)
+                    field_validation['validations'][f'{field}'] = self._handle_validation_calculation(
+                        row, field, field_properties
+                    )
 
             validated_dataframe.append(field_validation)
             return row
@@ -162,39 +165,32 @@ class BeneficiaryImportService:
         dataframe.apply(validate_row, axis='columns')
         return validated_dataframe
 
-    def _handle_uniqueness(self, row, field, field_properties, benefit_plan):
+    def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
         unique_class_validation = 'DeduplicationValidationStrategy'
-
         calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
-
         calculation = get_calculation_object(calculation_uuid)
-
         result_row = calculation.calculate_if_active_for_object(
             unique_class_validation,
             calculation_uuid,
             field,
             row[field],
-            benefit_plan=benefit_plan.id
+            benefit_plan=benefit_plan.id,
+            incoming_data=dataframe
         )
         return result_row
 
     def _handle_validation_calculation(self, row, field, field_properties):
         validation_calculation = field_properties.get("validationCalculation", {}).get("name")
-
         if not validation_calculation:
             raise ValueError("Missing validation name")
-
         calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
-
         calculation = get_calculation_object(calculation_uuid)
-
         result_row = calculation.calculate_if_active_for_object(
             validation_calculation,
             calculation_uuid,
             field,
             row[field]
         )
-
         return result_row
 
     def _create_upload_entry(self, filename):
