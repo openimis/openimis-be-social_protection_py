@@ -150,8 +150,8 @@ class BeneficiaryImportService:
         def validate_row(row):
             validated_row = row
             for field, field_properties in properties.items():
-                if "uniqueness" in field_properties:
-                    validated_row = self._handle_uniqueness(validated_row, field, field_properties)
+                # if "uniqueness" in field_properties:
+                #     validated_row = self._handle_uniqueness(validated_row, field, field_properties, existing_beneficiaries)
 
                 if "validationCalculation" in field_properties:
                     validated_row = self._handle_validation_calculation(validated_row, field, field_properties)
@@ -188,7 +188,7 @@ class BeneficiaryImportService:
         if not validation_calculation:
             raise ValueError("Missing validation name")
 
-        if field not in row:
+        if field not in row.columns:
             raise ValueError("Missing column in row")
 
         field_type = field_properties.get("type")
