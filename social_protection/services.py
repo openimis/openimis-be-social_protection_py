@@ -143,15 +143,14 @@ class BeneficiaryImportService:
         return {'success': True, 'data': {'is_valid': validated_dataframe.equals(dataframe)}}
 
     def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan) -> DataFrame:
-        existing_beneficiaries = Beneficiary.objects.filter(benefit_plan=benefit_plan)
         schema_dict = json.loads(benefit_plan.beneficiary_data_schema)
         properties = schema_dict.get("properties", {})
 
         def validate_row(row):
             validated_row = row
             for field, field_properties in properties.items():
-                # if "uniqueness" in field_properties:
-                #     validated_row = self._handle_uniqueness(validated_row, field, field_properties, existing_beneficiaries)
+                if "uniqueness" in field_properties:
+                    validated_row = self._handle_uniqueness(validated_row, field, field_properties, benefit_plan)
 
                 if "validationCalculation" in field_properties:
                     validated_row = self._handle_validation_calculation(validated_row, field, field_properties)
@@ -162,8 +161,8 @@ class BeneficiaryImportService:
 
         return validated_dataframe
 
-    def _handle_uniqueness(self, row, field, field_properties):
-        unique_class_validation = 'tmp'  # to be added when strategy for uniqueness will be added
+    def _handle_uniqueness(self, row, field, field_properties, benefit_plan):
+        unique_class_validation = 'DeduplicationValidationStrategy'
 
         if field not in row:
             raise ValueError("Missing column in row")
@@ -178,7 +177,8 @@ class BeneficiaryImportService:
             calculation_uuid,
             row,
             field_type,
-            row[field]
+            row[field],
+            benefit_plan.id
         )
         return result_row
 
