@@ -32,7 +32,7 @@ def import_beneficiaries(request):
         return Response({'success': False, 'error': str(e)}, status=500)
 
 
-@api_view(["GET"])
+@api_view(["POST"])
 @permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
 def validate_import_beneficiaries(request):
     try:
