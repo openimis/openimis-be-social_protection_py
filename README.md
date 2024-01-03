@@ -111,8 +111,63 @@ include related objects, and then click export all.
 ### Validations and deduplication detection 
 * This is handled by the POST endpoint 'api/social_protection/validate_import_beneficiaries'.
 * The input required is identical to that of the POST endpoint 'api/social_protection/import_beneficiaries' (CSV file). 
+* The endpoint heavily relies on schema properties. For instance, `validationCalculation` in the schema triggers a specific validation strategy. Similarly, in the duplications section of the schema, 
+setting `uniqueness: true` signifies the need for duplication checks based on the record's field value.
+* Based on the provided schema below (from `programme/benefit plan`), it indicates that validations will run for the `email` 
+field (`validationCalculation`), and duplication checks will be performed for `national_id` (`uniqueness: true`)
+```
+{
+   "$id":"https://example.com/beneficiares.schema.json",
+   "type":"object",
+   "title":"Record of beneficiares",
+   "$schema":"http://json-schema.org/draft-04/schema#",
+   "properties":{
+      "email":{
+         "type":"string",
+         "description":"email address to contact with beneficiary",
+         "validationCalculation":{
+            "name":"EmailValidationStrategy"
+         }
+      },
+      "able_bodied":{
+         "type":"boolean",
+         "description":"Flag determining whether someone is able bodied or not"
+      },
+      "national_id":{
+         "type":"string",
+         "uniqueness":true,
+         "description":"national id"
+      },
+      "educated_level":{
+         "type":"string",
+         "description":"The level of person when it comes to the school/education/studies"
+      },
+      "chronic_illness":{
+         "type":"boolean",
+         "description":"Flag determining whether someone has such kind of illness or not"
+      },
+      "national_id_type":{
+         "type":"string",
+         "description":"A type of national id"
+      },
+      "number_of_elderly":{
+         "type":"integer",
+         "description":"Number of elderly"
+      },
+      "number_of_children":{
+         "type":"integer",
+         "description":"Number of children"
+      },
+      "beneficiary_data_source":{
+         "type":"string",
+         "description":"The source from where such beneficiary comes"
+      }
+   },
+   "description":"This document records the details beneficiares"
+}
+```
 * An example response after calling the endpoint looks like this:
-``` 
+```
 {
    "success":true,
    "data":[
@@ -285,3 +340,4 @@ include related objects, and then click export all.
 `uniqueness` property is set for the field.  
 If the property `uniqueness` is set for a particular field, in `validations`, an additional key suffix `_uniqueness` indicates potential duplicates. 
 * The 'duplication' section shows potential duplicates among incoming (`incoming_duplicates`) and existing records (`duplicates_amoung_database`).
+* An empty `validation` property indicates that no validations need processing based on the schema properties. 
