@@ -333,7 +333,7 @@ field (`validationCalculation`), and duplication checks will be performed for `n
    ]
 }
 ```
-* Within the example response, the 'data' section contains information about each row in an array format.
+* Within the example response, the `data` section contains information about each row in an array format.
 * Each element in the array is a dictionary representing a row from the input CSV file. 
 * Inside this dictionary, the `row` key holds the representation of a new individual/beneficiary entering the system with provided values.
 * Under `validations`, you'll find validated fields (if the field in the schema is marked by a validation class) and potential duplicates if 
