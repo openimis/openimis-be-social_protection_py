@@ -108,7 +108,8 @@ include related objects, and then click export all.
 `openimis-be_social_protection/import_data`.
 * Rename filename into `opensearch_beneficiary_dashboard.ndjson`
 
-### Validations and deduplication detection 
+## Validations and deduplication detection
+
 * This is handled by the POST endpoint 'api/social_protection/validate_import_beneficiaries'.
 * The input required is identical to that of the POST endpoint 'api/social_protection/import_beneficiaries' (CSV file). 
 * The endpoint heavily relies on schema properties. For instance, `validationCalculation` in the schema triggers a specific validation strategy. Similarly, in the duplications section of the schema, 
