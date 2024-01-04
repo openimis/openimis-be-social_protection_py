@@ -35,6 +35,7 @@ class BenefitPlan(core_models.HistoryBusinessModel):
     def __str__(self):
         return f'Benefit Plan {self.code}'
 
+
 class Beneficiary(core_models.HistoryBusinessModel):
     individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
@@ -55,6 +56,9 @@ class BenefitPlanDataUploadRecords(core_models.HistoryModel):
     data_upload = models.ForeignKey(IndividualDataSourceUpload, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     workflow = models.CharField(max_length=50)
+
+    def __str__(self):
+        return f"{self.benefit_plan.code} {self.data_upload.source_name} {self.workflow} {self.date_created}"
 
 
 class GroupBeneficiary(core_models.HistoryBusinessModel):

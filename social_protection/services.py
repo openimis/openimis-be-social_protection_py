@@ -1,9 +1,12 @@
 import json
+import io
 import logging
+import uuid
 
 import pandas as pd
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
+from django.db.models import Q
 from pandas import DataFrame
 
 from calculation.services import get_calculation_object
@@ -13,7 +16,9 @@ from individual.models import IndividualDataSourceUpload, IndividualDataSource, 
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary, GroupBeneficiary
+    Beneficiary,
+    BenefitPlanDataUploadRecords,
+    GroupBeneficiary
 )
 from social_protection.validation import (
     BeneficiaryValidation,
@@ -135,14 +140,20 @@ class BeneficiaryImportService:
         self._trigger_workflow(workflow, upload, benefit_plan)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
-    @register_service_signal('benefit_plan.validate_import_beneficiaries')
-    def validate_import_beneficiaries(self, import_file: InMemoryUploadedFile, benefit_plan: BenefitPlan):
-        dataframe = self._load_import_file(import_file)
-        self._validate_dataframe(dataframe)
-        validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan)
-        return {'success': True, 'data': validated_dataframe}
+    def validate_import_beneficiaries(self, upload_id: uuid, individual_sources, benefit_plan: BenefitPlan):
+        dataframe = self._load_dataframe(individual_sources)
+        validated_dataframe, invalid_items = self._validate_possible_beneficiaries(
+            dataframe,
+            benefit_plan,
+            upload_id
+        )
+        return {'success': True, 'data': validated_dataframe, 'summary_invalid_items': invalid_items}
 
-    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan) -> DataFrame:
+    def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
+        self._create_import_valid_items_task(benefit_plan, upload_id, self.user)
+        self._create_download_invalid_items_task(benefit_plan, upload_id, self.user)
+
+    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid):
         schema_dict = benefit_plan.beneficiary_data_schema
         properties = schema_dict.get("properties", {})
         validated_dataframe = []
@@ -150,23 +161,24 @@ class BeneficiaryImportService:
         def validate_row(row):
             field_validation = {'row': row.to_dict(), 'validations': {}}
             for field, field_properties in properties.items():
-                if "uniqueness" in field_properties:
-                    field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
-                        row, field, field_properties, benefit_plan, dataframe
-                    )
                 if "validationCalculation" in field_properties:
                     field_validation['validations'][f'{field}'] = self._handle_validation_calculation(
                         row, field, field_properties
                     )
-
+                if "uniqueness" in field_properties:
+                    field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
+                        row, field, field_properties, benefit_plan, dataframe
+                    )
             validated_dataframe.append(field_validation)
+            self.__save_validation_error_in_data_source(row, field_validation)
             return row
 
         dataframe.apply(validate_row, axis='columns')
-        return validated_dataframe
+        invalid_items = self.__fetch_summary_of_broken_items(upload_id)
+        return validated_dataframe, invalid_items
 
     def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
-        unique_class_validation = 'DeduplicationValidationStrategy'
+        unique_class_validation = SocialProtectionConfig.unique_class_validation
         calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
         calculation = get_calculation_object(calculation_uuid)
         result_row = calculation.calculate_if_active_for_object(
@@ -214,8 +226,17 @@ class BeneficiaryImportService:
         dataframe.apply(self._save_row, axis='columns', args=(upload,))
 
     def _save_row(self, row, upload):
-        ds = IndividualDataSource(upload=upload, json_ext=row.to_dict())
+        ds = IndividualDataSource(upload=upload, json_ext=row.to_dict(), validations={})
         ds.save(username=self.user.login_name)
+
+    def _load_dataframe(self, individual_sources) -> pd.DataFrame:
+        data_from_source = []
+        for individual_source in individual_sources:
+            json_ext = individual_source.json_ext
+            individual_source.json_ext["id"] = individual_source.id
+            data_from_source.append(json_ext)
+        recreated_df = pd.DataFrame(data_from_source)
+        return recreated_df
 
     def _trigger_workflow(self,
                           workflow: WorkflowHandler,
@@ -225,7 +246,65 @@ class BeneficiaryImportService:
             # Core user UUID required
             'user_uuid': str(User.objects.get(username=self.user.login_name).id),
             'benefit_plan_uuid': str(benefit_plan.uuid),
-            'upload_uuid': str(upload.uuid)
+            'upload_uuid': str(upload.uuid),
         })
         upload.status = IndividualDataSourceUpload.Status.TRIGGERED
         upload.save(username=self.user.login_name)
+
+    def __save_validation_error_in_data_source(self, row, field_validation):
+        error_fields = []
+        for key, value in field_validation['validations'].items():
+            if not value['success']:
+                error_fields.append({
+                    "field_name": value['field_name'],
+                    "note": value['note']
+                })
+        individual_data_source = IndividualDataSource.objects.get(id=row['id'])
+        validation_column = {'validation_errors': error_fields}
+        individual_data_source.validations = validation_column
+        individual_data_source.save(username=self.user.username)
+
+    @register_service_signal('validation.create_task')
+    def _create_import_valid_items_task(self, benefit_plan, upload_id, user):
+        from social_protection.apps import SocialProtectionConfig
+        from tasks_management.services import TaskService
+        from tasks_management.apps import TasksManagementConfig
+        from tasks_management.models import Task
+        upload_record = BenefitPlanDataUploadRecords.objects.get(
+            data_upload_id=upload_id,
+            benefit_plan=benefit_plan,
+            is_deleted=False
+        )
+        TaskService(user).create({
+            'source': 'import_valid_items',
+            'entity': upload_record,
+            'status': Task.Status.RECEIVED,
+            'executor_action_event': TasksManagementConfig.default_executor_event,
+            'business_event': SocialProtectionConfig.validation_import_valid_items,
+        })
+
+    @register_service_signal('validation.download_invalid_items_task')
+    def _create_download_invalid_items_task(self, benefit_plan, upload_id, user):
+        from social_protection.apps import SocialProtectionConfig
+        from tasks_management.services import TaskService
+        from tasks_management.apps import TasksManagementConfig
+        from tasks_management.models import Task
+        upload_record = BenefitPlanDataUploadRecords.objects.get(
+            data_upload_id=upload_id,
+            benefit_plan=benefit_plan,
+            is_deleted=False
+        )
+        TaskService(user).create({
+            'source': 'download_invalid_items',
+            'entity': upload_record,
+            'status': Task.Status.RECEIVED,
+            'executor_action_event': TasksManagementConfig.default_executor_event,
+            'business_event': SocialProtectionConfig.validation_download_invalid_items,
+        })
+
+    def __fetch_summary_of_broken_items(self, upload_id):
+        return list(IndividualDataSource.objects.filter(
+            Q(is_deleted=False) &
+            Q(upload_id=upload_id) &
+            ~Q(validations__validation_errors=[])
+        ).values_list('uuid', flat=True))
