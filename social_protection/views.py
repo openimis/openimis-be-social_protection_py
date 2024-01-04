@@ -59,6 +59,7 @@ def _resolve_import_beneficiaries_args(request):
     workflow_name = request.POST.get('workflow_name')
     workflow_group = request.POST.get('workflow_group')
 
+    """
     if not import_file:
         raise ValueError(f'Import file not provided')
     if not benefit_plan_uuid:
@@ -80,9 +81,10 @@ def _resolve_import_beneficiaries_args(request):
         raise ValueError('Multiple workflows found: group={} name={}'.format(workflow_group, workflow_name))
 
     workflow = workflows[0]
+    """
     benefit_plan = BenefitPlan.objects.filter(uuid=benefit_plan_uuid).first()
 
     if not benefit_plan:
         raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
 
-    return import_file, workflow, benefit_plan
+    return import_file, None, benefit_plan

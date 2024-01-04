@@ -132,7 +132,7 @@ class BeneficiaryImportService:
         dataframe = self._load_import_file(import_file)
         self._validate_dataframe(dataframe)
         self._save_data_source(dataframe, upload)
-        self._trigger_workflow(workflow, upload, benefit_plan)
+        self._trigger_workflow(workflow, upload, benefit_plan, import_file)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
     @register_service_signal('benefit_plan.validate_import_beneficiaries')
@@ -150,15 +150,10 @@ class BeneficiaryImportService:
         def validate_row(row):
             field_validation = {'row': row.to_dict(), 'validations': {}}
             for field, field_properties in properties.items():
-                if "uniqueness" in field_properties:
-                    field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
-                        row, field, field_properties, benefit_plan, dataframe
-                    )
                 if "validationCalculation" in field_properties:
                     field_validation['validations'][f'{field}'] = self._handle_validation_calculation(
                         row, field, field_properties
                     )
-
             validated_dataframe.append(field_validation)
             return row
 
@@ -220,12 +215,14 @@ class BeneficiaryImportService:
     def _trigger_workflow(self,
                           workflow: WorkflowHandler,
                           upload: IndividualDataSourceUpload,
-                          benefit_plan: BenefitPlan):
+                          benefit_plan: BenefitPlan,
+                          import_file: InMemoryUploadedFile):
         workflow.run({
             # Core user UUID required
             'user_uuid': str(User.objects.get(username=self.user.login_name).id),
             'benefit_plan_uuid': str(benefit_plan.uuid),
-            'upload_uuid': str(upload.uuid)
+            'upload_uuid': str(upload.uuid),
+            'import_file': import_file
         })
         upload.status = IndividualDataSourceUpload.Status.TRIGGERED
         upload.save(username=self.user.login_name)
