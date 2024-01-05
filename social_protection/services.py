@@ -129,19 +129,16 @@ class BeneficiaryImportService:
                              import_file: InMemoryUploadedFile,
                              benefit_plan: BenefitPlan,
                              workflow: WorkflowHandler):
-        logger.error(import_file)
         upload = self._create_upload_entry(import_file.name)
         dataframe = self._load_import_file(import_file)
         self._validate_dataframe(dataframe)
         self._save_data_source(dataframe, upload)
-        logger.error(import_file)
-        self._trigger_workflow(workflow, upload, benefit_plan, import_file)
+        self._trigger_workflow(workflow, upload, benefit_plan)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
     @register_service_signal('benefit_plan.validate_import_beneficiaries')
-    def validate_import_beneficiaries(self, import_file: InMemoryUploadedFile, benefit_plan: BenefitPlan):
-        dataframe = self._load_import_file(import_file)
-        self._validate_dataframe(dataframe)
+    def validate_import_beneficiaries(self, individual_sources, benefit_plan: BenefitPlan):
+        dataframe = self._load_dataframe(individual_sources)
         validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan)
         return {'success': True, 'data': validated_dataframe}
 
@@ -215,23 +212,23 @@ class BeneficiaryImportService:
         ds = IndividualDataSource(upload=upload, json_ext=row.to_dict())
         ds.save(username=self.user.login_name)
 
+    def _load_dataframe(self, individual_sources) -> pd.DataFrame:
+        data_from_source = []
+        for individual_source in individual_sources:
+            json_ext = individual_source.json_ext
+            data_from_source.append(json_ext)
+        recreated_df = pd.DataFrame(data_from_source)
+        return recreated_df
+
     def _trigger_workflow(self,
                           workflow: WorkflowHandler,
                           upload: IndividualDataSourceUpload,
-                          benefit_plan: BenefitPlan,
-                          import_file: InMemoryUploadedFile):
-        logger.error('xxxxx')
-        logger.error(import_file)
-        logger.error(import_file)
-        logger.error(type(import_file))
-        logger.error('xxxxx')
-        files = {'file': (import_file.name, io.BytesIO(import_file.read()), 'text/csv')}
+                          benefit_plan: BenefitPlan):
         workflow.run({
             # Core user UUID required
             'user_uuid': str(User.objects.get(username=self.user.login_name).id),
             'benefit_plan_uuid': str(benefit_plan.uuid),
             'upload_uuid': str(upload.uuid),
-            'import_file': files
         })
         upload.status = IndividualDataSourceUpload.Status.TRIGGERED
         upload.save(username=self.user.login_name)

@@ -1,3 +1,4 @@
+import json
 import logging
 
 from rest_framework.decorators import api_view, permission_classes
@@ -5,6 +6,7 @@ from rest_framework.response import Response
 
 from im_export.views import check_user_rights
 from individual.apps import IndividualConfig
+from individual.models import IndividualDataSource
 from social_protection.models import BenefitPlan
 from social_protection.services import BeneficiaryImportService
 from workflow.services import WorkflowService
@@ -37,9 +39,9 @@ def import_beneficiaries(request):
 def validate_import_beneficiaries(request):
     try:
         user = request.user
-        import_file, _, benefit_plan = _resolve_import_beneficiaries_args(request)
+        individual_sources, benefit_plan = _resolve_validate_import_beneficiaries_args(request)
 
-        result = BeneficiaryImportService(user).validate_import_beneficiaries(import_file, benefit_plan)
+        result = BeneficiaryImportService(user).validate_import_beneficiaries(individual_sources, benefit_plan)
         if not result.get('success'):
             raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
 
@@ -86,3 +88,17 @@ def _resolve_import_beneficiaries_args(request):
         raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
 
     return import_file, workflow, benefit_plan
+
+
+def _resolve_validate_import_beneficiaries_args(request):
+    data = json.loads(request.body)
+    benefit_plan_uuid = data.get('benefit_plan')
+    upload_id = data.get('upload_id')
+
+    benefit_plan = BenefitPlan.objects.filter(uuid=benefit_plan_uuid, is_deleted=False).first()
+    individual_sources = IndividualDataSource.objects.filter(upload_id=upload_id)
+
+    if not benefit_plan:
+        raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
+
+    return individual_sources, benefit_plan
