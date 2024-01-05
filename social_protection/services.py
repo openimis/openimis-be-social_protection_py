@@ -142,6 +142,10 @@ class BeneficiaryImportService:
         validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan)
         return {'success': True, 'data': validated_dataframe}
 
+    @register_service_signal('benefit_plan.create_task_with_importing_valid_items')
+    def validate_import_beneficiaries(self):
+        pass
+
     def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan) -> DataFrame:
         schema_dict = benefit_plan.beneficiary_data_schema
         properties = schema_dict.get("properties", {})

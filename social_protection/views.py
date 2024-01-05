@@ -55,6 +55,19 @@ def validate_import_beneficiaries(request):
         return Response({'success': False, 'error': str(e)}, status=500)
 
 
+@api_view(["POST"])
+@permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
+def create_task_with_importing_valid_items(request):
+    try:
+        return Response({'success': True, 'error': None}, status=201)
+    except ValueError as exc:
+        logger.error("Error while sending callback to openIMIS", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=400)
+    except Exception as exc:
+        logger.error("Unexpected error while sending callback to openIMIS", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=500)
+
+
 def _resolve_import_beneficiaries_args(request):
     import_file = request.FILES.get('file')
     benefit_plan_uuid = request.POST.get('benefit_plan')
@@ -91,8 +104,8 @@ def _resolve_import_beneficiaries_args(request):
 
 
 def _resolve_validate_import_beneficiaries_args(request):
-    benefit_plan_uuid = request.POST.get('benefit_plan')
-    upload_id = request.POST.get('upload_id')
+    benefit_plan_uuid = request.data.get('benefit_plan')
+    upload_id = request.data.get('upload_id')
 
     logger.debug('xxxx')
     logger.debug(upload_id)
@@ -106,3 +119,7 @@ def _resolve_validate_import_beneficiaries_args(request):
         raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
 
     return individual_sources, benefit_plan
+
+
+def _resolve_send_callback_to_imis_args(request):
+    pass
