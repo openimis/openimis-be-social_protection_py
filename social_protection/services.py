@@ -1,4 +1,5 @@
 import json
+import io
 import logging
 
 import pandas as pd
@@ -224,7 +225,7 @@ class BeneficiaryImportService:
         logger.error(import_file)
         logger.error(type(import_file))
         logger.error('xxxxx')
-        files = {'file': (import_file.name, import_file.read(), 'text/csv')}
+        files = {'file': (import_file.name, io.BytesIO(import_file.read()), 'text/csv')}
         workflow.run({
             # Core user UUID required
             'user_uuid': str(User.objects.get(username=self.user.login_name).id),
