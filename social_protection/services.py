@@ -143,7 +143,7 @@ class BeneficiaryImportService:
         return {'success': True, 'data': validated_dataframe}
 
     @register_service_signal('benefit_plan.create_task_with_importing_valid_items')
-    def validate_import_beneficiaries(self):
+    def create_task_with_importing_valid_items(self):
         pass
 
     def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan) -> DataFrame:
