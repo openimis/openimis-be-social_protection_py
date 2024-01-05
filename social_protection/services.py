@@ -128,10 +128,12 @@ class BeneficiaryImportService:
                              import_file: InMemoryUploadedFile,
                              benefit_plan: BenefitPlan,
                              workflow: WorkflowHandler):
+        logger.error(import_file)
         upload = self._create_upload_entry(import_file.name)
         dataframe = self._load_import_file(import_file)
         self._validate_dataframe(dataframe)
         self._save_data_source(dataframe, upload)
+        logger.error(import_file)
         self._trigger_workflow(workflow, upload, benefit_plan, import_file)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
@@ -219,6 +221,8 @@ class BeneficiaryImportService:
                           import_file: InMemoryUploadedFile):
         logger.error('xxxxx')
         logger.error(import_file)
+        logger.error(import_file)
+        logger.error(type(import_file))
         logger.error('xxxxx')
         workflow.run({
             # Core user UUID required
