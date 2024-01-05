@@ -217,9 +217,9 @@ class BeneficiaryImportService:
                           upload: IndividualDataSourceUpload,
                           benefit_plan: BenefitPlan,
                           import_file: InMemoryUploadedFile):
-        print('xxxxx')
-        print(import_file)
-        print('xxxxx')
+        logger.error('xxxxx')
+        logger.error(import_file)
+        logger.error('xxxxx')
         workflow.run({
             # Core user UUID required
             'user_uuid': str(User.objects.get(username=self.user.login_name).id),
