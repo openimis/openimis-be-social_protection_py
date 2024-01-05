@@ -224,12 +224,13 @@ class BeneficiaryImportService:
         logger.error(import_file)
         logger.error(type(import_file))
         logger.error('xxxxx')
+        files = {'file': (import_file.name, import_file.read(), 'text/csv')}
         workflow.run({
             # Core user UUID required
             'user_uuid': str(User.objects.get(username=self.user.login_name).id),
             'benefit_plan_uuid': str(benefit_plan.uuid),
             'upload_uuid': str(upload.uuid),
-            'import_file': import_file
+            'import_file': files
         })
         upload.status = IndividualDataSourceUpload.Status.TRIGGERED
         upload.save(username=self.user.login_name)
