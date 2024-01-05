@@ -91,9 +91,8 @@ def _resolve_import_beneficiaries_args(request):
 
 
 def _resolve_validate_import_beneficiaries_args(request):
-    data = json.loads(request.body)
-    benefit_plan_uuid = data.get('benefit_plan')
-    upload_id = data.get('upload_id')
+    benefit_plan_uuid = request.POST.get('benefit_plan')
+    upload_id = request.POST.get('upload_id')
 
     benefit_plan = BenefitPlan.objects.filter(uuid=benefit_plan_uuid, is_deleted=False).first()
     individual_sources = IndividualDataSource.objects.filter(upload_id=upload_id)
