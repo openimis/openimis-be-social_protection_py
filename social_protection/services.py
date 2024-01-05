@@ -159,6 +159,7 @@ class BeneficiaryImportService:
                         row, field, field_properties
                     )
             validated_dataframe.append(field_validation)
+            self.__save_validation_error_in_data_source(row, field_validation)
             return row
 
         dataframe.apply(validate_row, axis='columns')
@@ -220,6 +221,7 @@ class BeneficiaryImportService:
         data_from_source = []
         for individual_source in individual_sources:
             json_ext = individual_source.json_ext
+            individual_source.json_ext["id"] = individual_source.id
             data_from_source.append(json_ext)
         recreated_df = pd.DataFrame(data_from_source)
         return recreated_df
@@ -236,3 +238,16 @@ class BeneficiaryImportService:
         })
         upload.status = IndividualDataSourceUpload.Status.TRIGGERED
         upload.save(username=self.user.login_name)
+
+    def __save_validation_error_in_data_source(self, row, field_validation):
+        error_fields = []
+        for key, value in field_validation['validations'].items():
+            if not value['success']:
+                error_fields.append({
+                    "field_name": value['field_name'],
+                    "note": value['note']
+                })
+        individual_data_source = IndividualDataSource.objects.get(id=row['id'])
+        validation_column = {'validation_errors': error_fields}
+        individual_data_source.validations = validation_column
+        individual_data_source.save(username=self.user.username)
