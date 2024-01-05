@@ -214,7 +214,7 @@ class BeneficiaryImportService:
         dataframe.apply(self._save_row, axis='columns', args=(upload,))
 
     def _save_row(self, row, upload):
-        ds = IndividualDataSource(upload=upload, json_ext=row.to_dict())
+        ds = IndividualDataSource(upload=upload, json_ext=row.to_dict(), validations={})
         ds.save(username=self.user.login_name)
 
     def _load_dataframe(self, individual_sources) -> pd.DataFrame:
