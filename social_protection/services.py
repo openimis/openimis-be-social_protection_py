@@ -70,7 +70,7 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
 
     def _data_for_json_ext_create(self, obj_data):
         individual = Individual.objects.get(id=obj_data.get("individual_id"))
-        benefit_plan = BenefitPlan.objects.get(id=obj_data.get("individual_id"))
+        benefit_plan = BenefitPlan.objects.get(id=obj_data.get("benefit_plan_id"))
         individual_identity_string = f'{individual.first_name} {individual.last_name}'
         json_ext_data = {"individual_identity": individual_identity_string,
                          "benefit_plan_string": benefit_plan.__str__()}
