@@ -44,10 +44,9 @@ def on_task_complete_validation_import_valid_items(**kwargs):
             task_status = task['status']
             if task_status == Task.Status.COMPLETED:
                 user = User.objects.get(id=result['data']['user']['id'])
-                logger.debug(task)
-                logger.debug(task['entity'])
-                benefit_plan = task['entity'].benefit_plan
-                upload_id = task['entity'].data_upload.id
+                upload_record = BenefitPlanDataUploadRecords.objects.get(id=task['entity_id'])
+                benefit_plan = upload_record.benefit_plan
+                upload_id = upload_record.data_upload.id
                 validation_import_valid_items(upload_id, benefit_plan, user)
     except Exception as exc:
         logger.error("Error while executing on_validation_import_valid_items", exc_info=exc)

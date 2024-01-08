@@ -271,7 +271,6 @@ class BeneficiaryImportService:
             benefit_plan=benefit_plan,
             is_deleted=False
         )
-        logger.debug(upload_record)
         t = TaskService(user).create({
             'source': 'import_valid_items',
             'entity': upload_record,
