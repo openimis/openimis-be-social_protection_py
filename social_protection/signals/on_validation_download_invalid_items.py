@@ -9,17 +9,12 @@ from tasks_management.models import Task
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import BenefitPlanDataUploadRecords
 from individual.models import IndividualDataSource
-from workflow.services import WorkflowService
 
 logger = logging.getLogger(__name__)
 
 
 def on_task_complete_validation_download_invalid_items(**kwargs):
     def validation_download_invalid_items(upload_id, benefit_plan, user):
-        workflow_name = SocialProtectionConfig.validation_import_valid_items_workflow
-        logger.debug(workflow_name)
-        result_workflow = WorkflowService.get_workflows(workflow_name, workflow_name)
-        logger.error(result_workflow)
         invalid_items = IndividualDataSource.objects.filter(
             Q(is_deleted=False) &
             Q(upload_id=upload_id) &
@@ -33,9 +28,9 @@ def on_task_complete_validation_download_invalid_items(**kwargs):
             data_from_source.append(json_ext)
         recreated_df = pd.DataFrame(data_from_source)
         csv_content = recreated_df.to_csv(index=False)
-        # Create an HTTP response with the CSV content as a file download
         response = HttpResponse(csv_content, content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="invalid_items.csv"'
+        logger.info(response)
         return response
 
     try:
