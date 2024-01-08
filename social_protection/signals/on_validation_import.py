@@ -1,7 +1,7 @@
 import logging
 
 from core.models import User
-from task.models import Task
+from tasks_management.models import Task
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import BenefitPlan, BenefitPlanDataUploadRecords
 from workflow.services import WorkflowService
@@ -37,15 +37,15 @@ def on_task_complete_validation_import_valid_items(**kwargs):
 
     try:
         result = kwargs.get('result', None)
-        benefit_plan = kwargs['data'][0][0]
-        upload_id = kwargs['data'][0][1]
         task = result['data']['task']
-        user = User.objects.get(id=result['data']['user']['id'])
         if result \
                 and result['success'] \
                 and task['business_event'] == SocialProtectionConfig.validation_import_valid_items:
             task_status = task['status']
             if task_status == Task.Status.COMPLETED:
+                user = User.objects.get(id=result['data']['user']['id'])
+                benefit_plan = kwargs['data'][0][0]
+                upload_id = kwargs['data'][0][1]
                 validation_import_valid_items(upload_id, benefit_plan, user)
     except Exception as exc:
         logger.error("Error while executing on_validation_import_valid_items", exc_info=exc)

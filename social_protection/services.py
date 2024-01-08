@@ -16,7 +16,9 @@ from individual.models import IndividualDataSourceUpload, IndividualDataSource, 
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary, GroupBeneficiary
+    Beneficiary,
+    BenefitPlanDataUploadRecords,
+    GroupBeneficiary
 )
 from social_protection.validation import (
     BeneficiaryValidation,
@@ -264,9 +266,14 @@ class BeneficiaryImportService:
         from tasks_management.services import TaskService
         from tasks_management.apps import TasksManagementConfig
         from tasks_management.models import Task
+        upload_record = BenefitPlanDataUploadRecords.objects.get(
+            data_upload_id=upload_id,
+            benefit_plan=benefit_plan,
+            is_deleted=False
+        )
         t = TaskService(user).create({
             'source': 'import_valid_items',
-            'entity': benefit_plan,
+            'entity': upload_record,
             'status': Task.Status.RECEIVED,
             'executor_action_event': TasksManagementConfig.default_executor_event,
             'business_event': SocialProtectionConfig.validation_import_valid_items,
