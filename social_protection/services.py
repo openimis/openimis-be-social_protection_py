@@ -138,8 +138,7 @@ class BeneficiaryImportService:
         self._trigger_workflow(workflow, upload, benefit_plan)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
-    @register_service_signal('benefit_plan.validate_import_beneficiaries')
-    def validate_import_beneficiaries(self, upload_id, individual_sources, benefit_plan: BenefitPlan):
+    def validate_import_beneficiaries(self, upload_id: uuid, individual_sources, benefit_plan: BenefitPlan):
         dataframe = self._load_dataframe(individual_sources)
         validated_dataframe, invalid_items = self._validate_possible_beneficiaries(
             dataframe,
@@ -148,9 +147,9 @@ class BeneficiaryImportService:
         )
         return {'success': True, 'data': validated_dataframe, 'summary_invalid_items': invalid_items}
 
-    @register_service_signal('benefit_plan.create_task_with_importing_valid_items')
-    def create_task_with_importing_valid_items(self):
-        pass
+    def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
+        self._create_import_valid_items_task(benefit_plan, upload_id, self.user)
+        self._create_download_invalid_items_task(benefit_plan, upload_id, self.user)
 
     def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid):
         schema_dict = benefit_plan.beneficiary_data_schema
@@ -259,9 +258,34 @@ class BeneficiaryImportService:
         individual_data_source.validations = validation_column
         individual_data_source.save(username=self.user.username)
 
+    @register_service_signal('benefit_plan.import_valid_items_task')
+    def _create_import_valid_items_task(self, benefit_plan, upload_id, user):
+        from social_protection.apps import SocialProtectionConfig
+        from tasks_management.services import TaskService
+        from tasks_management.apps import TasksManagementConfig
+        from tasks_management.models import Task
+        TaskService(user).create({
+            'source': 'import_valid_items',
+            'entity': benefit_plan,
+            'status': Task.Status.RECEIVED,
+            'executor_action_event': TasksManagementConfig.default_executor_event,
+            'business_event': SocialProtectionConfig.validation_import_valid_items,
+        })
+
+    @register_service_signal('benefit_plan.download_invalid_items_task')
+    def _create_download_invalid_items_task(self, benefit_plan, upload_id, user):
+        pass
+
     def __fetch_summary_of_broken_items(self, upload_id):
         return list(IndividualDataSource.objects.filter(
             Q(is_deleted=False) &
             Q(upload_id=upload_id) &
             ~Q(validations__validation_errors=[])
+        ).values_list('uuid', flat=True))
+
+    def __fetch_summary_of_valid_items(self, upload_id):
+        return list(IndividualDataSource.objects.filter(
+            Q(is_deleted=False) &
+            Q(upload_id=upload_id) &
+            Q(validations__validation_errors=[])
         ).values_list('uuid', flat=True))

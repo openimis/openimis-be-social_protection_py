@@ -63,7 +63,14 @@ def validate_import_beneficiaries(request):
 @permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
 def create_task_with_importing_valid_items(request):
     try:
-        return Response({'success': True, 'error': None}, status=201)
+        user = request.user
+        upload_id, benefit_plan = _resolve_create_task_with_importing_valid_items(request)
+        result = BeneficiaryImportService(user).create_task_with_importing_valid_items(
+            upload_id,
+            benefit_plan
+        )
+        if not result.get('success'):
+            raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
     except ValueError as exc:
         logger.error("Error while sending callback to openIMIS", exc_info=exc)
         return Response({'success': False, 'error': str(exc)}, status=400)
@@ -120,5 +127,13 @@ def _resolve_validate_import_beneficiaries_args(request):
     return upload_id, individual_sources, benefit_plan
 
 
-def _resolve_send_callback_to_imis_args(request):
-    pass
+def _resolve_create_task_with_importing_valid_items(request):
+    benefit_plan_uuid = request.data.get('benefit_plan')
+    upload_id = request.data.get('upload_id')
+
+    benefit_plan = BenefitPlan.objects.filter(uuid=benefit_plan_uuid, is_deleted=False).first()
+
+    if not benefit_plan:
+        raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
+
+    return upload_id, benefit_plan
