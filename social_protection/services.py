@@ -258,7 +258,7 @@ class BeneficiaryImportService:
         individual_data_source.validations = validation_column
         individual_data_source.save(username=self.user.username)
 
-    @register_service_signal('validation.create_task')
+    @register_service_signal('benefit_plan.create_task')
     def _create_import_valid_items_task(self, benefit_plan, upload_id, user):
         from social_protection.apps import SocialProtectionConfig
         from tasks_management.services import TaskService

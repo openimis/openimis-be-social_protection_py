@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def on_task_complete_validation_import_valid_items(**kwargs):
-    def import_valid_items(upload_id, benefit_plan, user):
+    def validation_import_valid_items(upload_id, benefit_plan, user):
         workflow_name = SocialProtectionConfig.validation_import_valid_items_workflow
         logger.debug(workflow_name)
         result_workflow = WorkflowService.get_workflows(workflow_name, workflow_name)
@@ -46,6 +46,6 @@ def on_task_complete_validation_import_valid_items(**kwargs):
                 and task['business_event'] == SocialProtectionConfig.validation_import_valid_items:
             task_status = task['status']
             if task_status == Task.Status.COMPLETED:
-                import_valid_items(upload_id, benefit_plan, user)
+                validation_import_valid_items(upload_id, benefit_plan, user)
     except Exception as exc:
         logger.error("Error while executing on_validation_import_valid_items", exc_info=exc)
