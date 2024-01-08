@@ -264,13 +264,14 @@ class BeneficiaryImportService:
         from tasks_management.services import TaskService
         from tasks_management.apps import TasksManagementConfig
         from tasks_management.models import Task
-        TaskService(user).create({
+        t = TaskService(user).create({
             'source': 'import_valid_items',
             'entity': benefit_plan,
             'status': Task.Status.RECEIVED,
             'executor_action_event': TasksManagementConfig.default_executor_event,
             'business_event': SocialProtectionConfig.validation_import_valid_items,
         })
+        logger.debug(t)
 
     @register_service_signal('benefit_plan.download_invalid_items_task')
     def _create_download_invalid_items_task(self, benefit_plan, upload_id, user):
