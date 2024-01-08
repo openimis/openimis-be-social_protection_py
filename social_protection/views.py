@@ -65,12 +65,11 @@ def create_task_with_importing_valid_items(request):
     try:
         user = request.user
         upload_id, benefit_plan = _resolve_create_task_with_importing_valid_items(request)
-        result = BeneficiaryImportService(user).create_task_with_importing_valid_items(
+        BeneficiaryImportService(user).create_task_with_importing_valid_items(
             upload_id,
             benefit_plan
         )
-        if not result.get('success'):
-            raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
+        return Response({'success': True, 'error': None}, status=201)
     except ValueError as exc:
         logger.error("Error while sending callback to openIMIS", exc_info=exc)
         return Response({'success': False, 'error': str(exc)}, status=400)
