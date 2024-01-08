@@ -56,6 +56,9 @@ class BenefitPlanDataUploadRecords(core_models.HistoryModel):
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     workflow = models.CharField(max_length=50)
 
+    def __str__(self):
+        return f"{self.benefit_plan.code} {self.data_upload.source_name} {self.workflow}"
+
 
 class GroupBeneficiary(core_models.HistoryBusinessModel):
     group = models.ForeignKey(Group, models.DO_NOTHING, null=False)
