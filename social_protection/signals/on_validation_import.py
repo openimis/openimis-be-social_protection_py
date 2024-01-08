@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 def on_validation_import_valid_items(**kwargs):
     def import_valid_items(upload_id, benefit_plan, user):
         workflow_name = SocialProtectionConfig.validation_import_valid_items_workflow
+        logger.debug(workflow_name)
         result_workflow = WorkflowService.get_workflows(workflow_name, workflow_name)
+        logger.error(result_workflow)
         if not result_workflow.get('success'):
             raise ValueError('{}: {}'.format(result_workflow.get("message"), result_workflow.get("details")))
 
@@ -24,6 +26,8 @@ def on_validation_import_valid_items(**kwargs):
             raise ValueError('Multiple workflows found: group={} name={}'.format(workflow_name, workflow_name))
 
         workflow = workflows[0]
+        logger.error('workflow')
+        logger.error(workflow)
         workflow.run({
             # Core user UUID required
             'user_uuid': str(user.id),
@@ -44,4 +48,4 @@ def on_validation_import_valid_items(**kwargs):
             if task_status == Task.Status.COMPLETED:
                 import_valid_items(upload_id, benefit_plan, user)
     except Exception as exc:
-        logger.error("Error while executing on_task_complete_payroll_reconciliation", exc_info=exc)
+        logger.error("Error while executing on_validation_import_valid_items", exc_info=exc)
