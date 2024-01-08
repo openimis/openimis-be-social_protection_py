@@ -260,7 +260,7 @@ class BeneficiaryImportService:
         individual_data_source.validations = validation_column
         individual_data_source.save(username=self.user.username)
 
-    @register_service_signal('benefit_plan.create_task')
+    @register_service_signal('validation.create_task')
     def _create_import_valid_items_task(self, benefit_plan, upload_id, user):
         from social_protection.apps import SocialProtectionConfig
         from tasks_management.services import TaskService
@@ -271,29 +271,36 @@ class BeneficiaryImportService:
             benefit_plan=benefit_plan,
             is_deleted=False
         )
-        t = TaskService(user).create({
+        TaskService(user).create({
             'source': 'import_valid_items',
             'entity': upload_record,
             'status': Task.Status.RECEIVED,
             'executor_action_event': TasksManagementConfig.default_executor_event,
             'business_event': SocialProtectionConfig.validation_import_valid_items,
         })
-        logger.debug(t)
 
-    @register_service_signal('benefit_plan.download_invalid_items_task')
+    @register_service_signal('validation.download_invalid_items_task')
     def _create_download_invalid_items_task(self, benefit_plan, upload_id, user):
-        pass
+        from social_protection.apps import SocialProtectionConfig
+        from tasks_management.services import TaskService
+        from tasks_management.apps import TasksManagementConfig
+        from tasks_management.models import Task
+        upload_record = BenefitPlanDataUploadRecords.objects.get(
+            data_upload_id=upload_id,
+            benefit_plan=benefit_plan,
+            is_deleted=False
+        )
+        TaskService(user).create({
+            'source': 'download_invalid_items',
+            'entity': upload_record,
+            'status': Task.Status.RECEIVED,
+            'executor_action_event': TasksManagementConfig.default_executor_event,
+            'business_event': SocialProtectionConfig.validation_download_invalid_items,
+        })
 
     def __fetch_summary_of_broken_items(self, upload_id):
         return list(IndividualDataSource.objects.filter(
             Q(is_deleted=False) &
             Q(upload_id=upload_id) &
             ~Q(validations__validation_errors=[])
-        ).values_list('uuid', flat=True))
-
-    def __fetch_summary_of_valid_items(self, upload_id):
-        return list(IndividualDataSource.objects.filter(
-            Q(is_deleted=False) &
-            Q(upload_id=upload_id) &
-            Q(validations__validation_errors=[])
         ).values_list('uuid', flat=True))

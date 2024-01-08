@@ -57,7 +57,7 @@ class BenefitPlanDataUploadRecords(core_models.HistoryModel):
     workflow = models.CharField(max_length=50)
 
     def __str__(self):
-        return f"{self.benefit_plan.code} {self.data_upload.source_name} {self.workflow}"
+        return f"{self.benefit_plan.code} {self.data_upload.source_name} {self.workflow} {self.date_created}"
 
 
 class GroupBeneficiary(core_models.HistoryBusinessModel):
