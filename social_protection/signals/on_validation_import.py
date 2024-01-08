@@ -9,7 +9,7 @@ from workflow.services import WorkflowService
 logger = logging.getLogger(__name__)
 
 
-def on_validation_import_valid_items(**kwargs):
+def on_task_complete_validation_import_valid_items(**kwargs):
     def import_valid_items(upload_id, benefit_plan, user):
         workflow_name = SocialProtectionConfig.validation_import_valid_items_workflow
         logger.debug(workflow_name)
