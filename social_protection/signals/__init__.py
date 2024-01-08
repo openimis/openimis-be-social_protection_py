@@ -33,7 +33,7 @@ def bind_service_signals():
         bind_type=ServiceSignalBindType.AFTER
     )
     bind_service_signal(
-        'benefit_plan.import_valid_items_task',
+        'task_service.complete_task',
         on_validation_import_valid_items,
         bind_type=ServiceSignalBindType.AFTER
     )
