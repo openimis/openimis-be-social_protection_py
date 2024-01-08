@@ -165,6 +165,10 @@ class BeneficiaryImportService:
                     field_validation['validations'][f'{field}'] = self._handle_validation_calculation(
                         row, field, field_properties
                     )
+                if "uniqueness" in field_properties:
+                    field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
+                        row, field, field_properties, benefit_plan, dataframe
+                    )
             validated_dataframe.append(field_validation)
             self.__save_validation_error_in_data_source(row, field_validation)
             return row
@@ -174,7 +178,7 @@ class BeneficiaryImportService:
         return validated_dataframe, invalid_items
 
     def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
-        unique_class_validation = 'DeduplicationValidationStrategy'
+        unique_class_validation = SocialProtectionConfig.unique_class_validation
         calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
         calculation = get_calculation_object(calculation_uuid)
         result_row = calculation.calculate_if_active_for_object(
