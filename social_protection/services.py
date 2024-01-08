@@ -141,14 +141,18 @@ class BeneficiaryImportService:
     @register_service_signal('benefit_plan.validate_import_beneficiaries')
     def validate_import_beneficiaries(self, upload_id, individual_sources, benefit_plan: BenefitPlan):
         dataframe = self._load_dataframe(individual_sources)
-        validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan, upload_id)
-        return {'success': True, 'data': validated_dataframe}
+        validated_dataframe, invalid_items = self._validate_possible_beneficiaries(
+            dataframe,
+            benefit_plan,
+            upload_id
+        )
+        return {'success': True, 'data': validated_dataframe, 'summary_invalid_items': invalid_items}
 
     @register_service_signal('benefit_plan.create_task_with_importing_valid_items')
     def create_task_with_importing_valid_items(self):
         pass
 
-    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid) -> DataFrame:
+    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid):
         schema_dict = benefit_plan.beneficiary_data_schema
         properties = schema_dict.get("properties", {})
         validated_dataframe = []
@@ -165,8 +169,8 @@ class BeneficiaryImportService:
             return row
 
         dataframe.apply(validate_row, axis='columns')
-        validated_dataframe['summary_invalid_items'] = self.__fetch_summary_of_broken_items(upload_id)
-        return validated_dataframe
+        invalid_items = self.__fetch_summary_of_broken_items(upload_id)
+        return validated_dataframe, invalid_items
 
     def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
         unique_class_validation = 'DeduplicationValidationStrategy'
