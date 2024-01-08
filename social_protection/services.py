@@ -1,10 +1,12 @@
 import json
 import io
 import logging
+import uuid
 
 import pandas as pd
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
+from django.db.models import Q
 from pandas import DataFrame
 
 from calculation.services import get_calculation_object
@@ -137,16 +139,16 @@ class BeneficiaryImportService:
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
     @register_service_signal('benefit_plan.validate_import_beneficiaries')
-    def validate_import_beneficiaries(self, individual_sources, benefit_plan: BenefitPlan):
+    def validate_import_beneficiaries(self, upload_id, individual_sources, benefit_plan: BenefitPlan):
         dataframe = self._load_dataframe(individual_sources)
-        validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan)
+        validated_dataframe = self._validate_possible_beneficiaries(dataframe, benefit_plan, upload_id)
         return {'success': True, 'data': validated_dataframe}
 
     @register_service_signal('benefit_plan.create_task_with_importing_valid_items')
     def create_task_with_importing_valid_items(self):
         pass
 
-    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan) -> DataFrame:
+    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid) -> DataFrame:
         schema_dict = benefit_plan.beneficiary_data_schema
         properties = schema_dict.get("properties", {})
         validated_dataframe = []
@@ -163,6 +165,7 @@ class BeneficiaryImportService:
             return row
 
         dataframe.apply(validate_row, axis='columns')
+        validated_dataframe['summary_invalid_items'] = self.__fetch_summary_of_broken_items(upload_id)
         return validated_dataframe
 
     def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
@@ -251,3 +254,10 @@ class BeneficiaryImportService:
         validation_column = {'validation_errors': error_fields}
         individual_data_source.validations = validation_column
         individual_data_source.save(username=self.user.username)
+
+    def __fetch_summary_of_broken_items(self, upload_id):
+        return list(IndividualDataSource.objects.filter(
+            Q(is_deleted=False) &
+            Q(upload_id=upload_id) &
+            ~Q(validations__validation_errors=[])
+        ).values_list('uuid', flat=True))

@@ -39,9 +39,13 @@ def import_beneficiaries(request):
 def validate_import_beneficiaries(request):
     try:
         user = request.user
-        individual_sources, benefit_plan = _resolve_validate_import_beneficiaries_args(request)
+        upload_id, individual_sources, benefit_plan = _resolve_validate_import_beneficiaries_args(request)
 
-        result = BeneficiaryImportService(user).validate_import_beneficiaries(individual_sources, benefit_plan)
+        result = BeneficiaryImportService(user).validate_import_beneficiaries(
+            upload_id,
+            individual_sources,
+            benefit_plan
+        )
         if not result.get('success'):
             raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
 
@@ -113,7 +117,7 @@ def _resolve_validate_import_beneficiaries_args(request):
     if not benefit_plan:
         raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
 
-    return individual_sources, benefit_plan
+    return upload_id, individual_sources, benefit_plan
 
 
 def _resolve_send_callback_to_imis_args(request):
