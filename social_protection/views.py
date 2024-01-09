@@ -112,11 +112,6 @@ def download_invalid_items(request):
         response['Content-Disposition'] = 'attachment; filename="invalid_items.csv"'
         return response
 
-        # Create an HTTP response with the CSV content
-        response = HttpResponse(csv_content, content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="invalid_items.csv"'
-        return response
-
     except ValueError as exc:
         # Handle errors gracefully
         logger.error("Error while fetching data", exc_info=exc)
