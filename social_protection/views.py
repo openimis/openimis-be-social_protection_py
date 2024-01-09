@@ -80,33 +80,36 @@ def create_task_with_importing_valid_items(request):
         return Response({'success': False, 'error': str(exc)}, status=500)
 
 
-@api_view(["POST"])
-@permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms,)])
-def download_invalid_items(request):
+@api_view(["GET"])
+def download_invalid_items(request, upload_id):
     try:
-        upload_id, benefit_plan = _resolve_create_task_with_importing_valid_items(request)
         invalid_items = IndividualDataSource.objects.filter(
             Q(is_deleted=False) &
             Q(upload_id=upload_id) &
             ~Q(validations__validation_errors=[])
         )
+
         data_from_source = []
         for invalid_item in invalid_items:
             json_ext = invalid_item.json_ext
             invalid_item.json_ext["id"] = invalid_item.id
             invalid_item.json_ext["error"] = invalid_item.validations
             data_from_source.append(json_ext)
+
         recreated_df = pd.DataFrame(data_from_source)
         csv_content = recreated_df.to_csv(index=False)
+
+        # Create an HTTP response with the CSV content
         response = HttpResponse(csv_content, content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="invalid_items.csv"'
-        logger.info(response)
         return response
+
     except ValueError as exc:
-        logger.error("Error while sending callback to openIMIS", exc_info=exc)
+        # Handle errors gracefully
+        logger.error("Error while fetching data", exc_info=exc)
         return Response({'success': False, 'error': str(exc)}, status=400)
     except Exception as exc:
-        logger.error("Unexpected error while sending callback to openIMIS", exc_info=exc)
+        logger.error("Unexpected error", exc_info=exc)
         return Response({'success': False, 'error': str(exc)}, status=500)
 
 
