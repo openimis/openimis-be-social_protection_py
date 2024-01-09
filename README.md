@@ -110,7 +110,9 @@ include related objects, and then click export all.
 
 ## Validations and deduplication detection
 
+### Validations endpoint
 * This is handled by the POST endpoint 'api/social_protection/validate_import_beneficiaries'.
+* The endpoint is utilized within the upload workflow when a user uploads beneficiaries into a specific system.
 * The input required is identical to that of the POST endpoint 'api/social_protection/import_beneficiaries' (CSV file). 
 * The endpoint heavily relies on schema properties. For instance, `validationCalculation` in the schema triggers a specific validation strategy. Similarly, in the duplications section of the schema, 
 setting `uniqueness: true` signifies the need for duplication checks based on the record's field value.
@@ -342,3 +344,20 @@ field (`validationCalculation`), and duplication checks will be performed for `n
 If the property `uniqueness` is set for a particular field, in `validations`, an additional key suffix `_uniqueness` indicates potential duplicates. 
 * The 'duplication' section shows potential duplicates among incoming (`incoming_duplicates`) and existing records (`duplicates_amoung_database`).
 * An empty `validation` property indicates that no validations need processing based on the schema properties. 
+* Next to the `data` and `success` properties, there is a `summary_invalid_items` field containing a list of uuids of individual data sources which are invalid. 
+This list is necessary in the Benefit Update workflow to flag such records in the IndividualDataSource.
+
+### Validations in upload workflow
+* https://github.com/openimis/openimis-lightning_dkr/tree/develop Here there are two workflows responsible for uploading and validation data: `BenefitPlanUpdate` and `beneficiary-import-valid-items`
+* The workflow `BenefitPlanUpdate` is utilized when a file is uploaded using a form in BenefitPlanPage.
+* The workflow named `beneficiary-import-valid-items` is activated to confirm valid items following the validation process. Its activation occurs when a task linked to that specific action is initiated.
+* The validation operates according to the calculation rule, defining the strategy for determining validation approaches.
+* More about calculation strategy verification in calcrule strategy you can find more in [README Section in calculation validation strategy module](https://github.com/openimis/openimis-be-calcrule_validations_py) 
+* The upload process involves two stages: first, a validation process verifies the data, and upon successful validation, 
+the data is uploaded. In case of any invalid items, there's an additional step where the user can review and download a 
+report containing the invalid items. After reviewing the report, the user can proceed to import the valid items through task management.
+* For successful scenarios, the status is marked as `SUCCESS`. There's no requirement for maker-checker validation (task) since the process wasn't halted.
+* In scenarios where one or more records are invalid, the status is `WAITING_FOR_VERIFICATION`. This indicates the presence of a task in the maker-checker view for verifying the upload of valid items. 
+The report containing invalid items can be downloaded from the upload history on the benefit plan page.
+* When a user accepts the valid items from an import that faced issues with some invalid items and there are no errors in this workflow, 
+the status of the import is marked as `PARTIAL_SUCCESS`. This triggers the `beneficiary-import-valid-items` workflow in such cases. 
