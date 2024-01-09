@@ -81,8 +81,8 @@ def create_task_with_importing_valid_items(request):
 
 
 @api_view(["POST"])
-@permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
-def upload_invalid_items(request):
+@permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms,)])
+def download_invalid_items(request):
     try:
         upload_id, benefit_plan = _resolve_create_task_with_importing_valid_items(request)
         invalid_items = IndividualDataSource.objects.filter(
