@@ -149,7 +149,6 @@ class BeneficiaryImportService:
 
     def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
         self._create_import_valid_items_task(benefit_plan, upload_id, self.user)
-        self._create_download_invalid_items_task(benefit_plan, upload_id, self.user)
 
     def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid):
         schema_dict = benefit_plan.beneficiary_data_schema
@@ -279,25 +278,6 @@ class BeneficiaryImportService:
             'status': Task.Status.RECEIVED,
             'executor_action_event': TasksManagementConfig.default_executor_event,
             'business_event': SocialProtectionConfig.validation_import_valid_items,
-        })
-
-    @register_service_signal('validation.download_invalid_items_task')
-    def _create_download_invalid_items_task(self, benefit_plan, upload_id, user):
-        from social_protection.apps import SocialProtectionConfig
-        from tasks_management.services import TaskService
-        from tasks_management.apps import TasksManagementConfig
-        from tasks_management.models import Task
-        upload_record = BenefitPlanDataUploadRecords.objects.get(
-            data_upload_id=upload_id,
-            benefit_plan=benefit_plan,
-            is_deleted=False
-        )
-        TaskService(user).create({
-            'source': 'download_invalid_items',
-            'entity': upload_record,
-            'status': Task.Status.RECEIVED,
-            'executor_action_event': TasksManagementConfig.default_executor_event,
-            'business_event': SocialProtectionConfig.validation_download_invalid_items,
         })
 
     def __fetch_summary_of_broken_items(self, upload_id):
