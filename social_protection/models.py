@@ -35,6 +35,7 @@ class BenefitPlan(core_models.HistoryBusinessModel):
     def __str__(self):
         return f'Benefit Plan {self.code}'
 
+
 class Beneficiary(core_models.HistoryBusinessModel):
     individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)

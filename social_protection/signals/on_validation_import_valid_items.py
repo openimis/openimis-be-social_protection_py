@@ -3,7 +3,7 @@ import logging
 from core.models import User
 from tasks_management.models import Task
 from social_protection.apps import SocialProtectionConfig
-from social_protection.models import BenefitPlan, BenefitPlanDataUploadRecords
+from social_protection.models import BenefitPlanDataUploadRecords
 from workflow.services import WorkflowService
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,6 @@ def on_task_complete_validation_import_valid_items(**kwargs):
 
         workflow = workflows[0]
         workflow.run({
-            # Core user UUID required
             'user_uuid': str(user.id),
             'benefit_plan_uuid': str(benefit_plan.uuid),
             'upload_uuid': str(upload_id),

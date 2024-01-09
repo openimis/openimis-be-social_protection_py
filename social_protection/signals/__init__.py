@@ -1,20 +1,16 @@
 import logging
 
-from core.models import User
 from core.service_signals import ServiceSignalBindType
 from core.signals import bind_service_signal
-from social_protection.apps import SocialProtectionConfig
 from social_protection.services import BenefitPlanService, BeneficiaryService, GroupBeneficiaryService
 from social_protection.signals.on_benefit_plan_data_upload import on_benefit_plan_data_upload
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_validation_import_valid_items
-from social_protection.signals.on_validation_download_invalid_items import on_task_complete_validation_download_invalid_items
 from tasks_management.services import on_task_complete_service_handler
 
 logger = logging.getLogger(__name__)
 
 
 def bind_service_signals():
-    print('benefit_plan')
     bind_service_signal(
         'benefit_plan.import_beneficiaries',
         on_benefit_plan_data_upload,
@@ -40,9 +36,3 @@ def bind_service_signals():
         on_task_complete_validation_import_valid_items,
         bind_type=ServiceSignalBindType.AFTER
     )
-    bind_service_signal(
-        'task_service.complete_task',
-        on_task_complete_validation_download_invalid_items,
-        bind_type=ServiceSignalBindType.AFTER
-    )
-    print('end benefit plan')
