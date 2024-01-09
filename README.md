@@ -352,7 +352,7 @@ This list is necessary in the Benefit Update workflow to flag such records in th
 * The workflow `BenefitPlanUpdate` is utilized when a file is uploaded using a form in BenefitPlanPage.
 * The workflow named `beneficiary-import-valid-items` is activated to confirm valid items following the validation process. Its activation occurs when a task linked to that specific action is initiated.
 * The validation operates according to the calculation rule, defining the strategy for determining validation approaches.
-* More about calculation strategy verification in calcrule strategy you can find more in [README Section in calculation validation strategy module](https://github.com/openimis/openimis-be-calcrule_validations_py) 
+* More about calculation strategy verification in calcrule strategy you can find more in [README Section in calculation validation strategy module](https://github.com/openimis/openimis-be-calcrule_validations_py/tree/develop) 
 * The upload process involves two stages: first, a validation process verifies the data, and upon successful validation, 
 the data is uploaded. In case of any invalid items, there's an additional step where the user can review and download a 
 report containing the invalid items. After reviewing the report, the user can proceed to import the valid items through task management.
