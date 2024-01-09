@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
@@ -99,7 +99,18 @@ def download_invalid_items(request):
             data_from_source.append(json_ext)
 
         recreated_df = pd.DataFrame(data_from_source)
-        csv_content = recreated_df.to_csv(index=False)
+
+        # Function to stream the DataFrame content as CSV
+        def stream_csv():
+            output = recreated_df.to_csv(index=False)
+            yield output.encode('utf-8')
+
+        # Create a streaming response with the CSV content
+        response = StreamingHttpResponse(
+            stream_csv(), content_type='text/csv'
+        )
+        response['Content-Disposition'] = 'attachment; filename="invalid_items.csv"'
+        return response
 
         # Create an HTTP response with the CSV content
         response = HttpResponse(csv_content, content_type='text/csv')
