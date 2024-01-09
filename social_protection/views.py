@@ -81,8 +81,10 @@ def create_task_with_importing_valid_items(request):
 
 
 @api_view(["GET"])
-def download_invalid_items(request, upload_id):
+def download_invalid_items(request):
     try:
+        upload_id = request.query_params.get('upload_id')
+
         invalid_items = IndividualDataSource.objects.filter(
             Q(is_deleted=False) &
             Q(upload_id=upload_id) &
