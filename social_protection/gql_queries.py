@@ -1,5 +1,6 @@
 import graphene
 from django.contrib.auth.models import AnonymousUser
+from graphene import ObjectType
 from graphene_django import DjangoObjectType
 
 from core import prefix_filterset, ExtendedConnection
@@ -112,3 +113,17 @@ class BenefitPlanDataUploadQGLType(DjangoObjectType, JsonExtMixin):
             **prefix_filterset("benefit_plan__", BenefitPlanGQLType._meta.filter_fields),
         }
         connection_class = ExtendedConnection
+
+
+class BenefitPlanSchemaFieldsGQLType(ObjectType):
+    schema_fields = graphene.List(graphene.String)
+
+    def resolve_schema_fields(self, info, **kwargs):
+        schemas = self.values_list("json_ext__properties", flat=True)
+        field_list = set(
+            f'json_ext__{field}'
+            for schema in schemas  # Iterate over each schema
+            if schema  # Ensure the schema is not None or empty
+            for field in schema  # Iterate over fields in the schema
+        )
+        return field_list
