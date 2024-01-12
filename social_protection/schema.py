@@ -25,7 +25,7 @@ from social_protection.gql_mutations import (
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
-    BeneficiaryGQLType, GroupBeneficiaryGQLType, BenefitPlanDataUploadQGLType
+    BeneficiaryGQLType, GroupBeneficiaryGQLType, BenefitPlanDataUploadQGLType, BenefitPlanSchemaFieldsGQLType
 )
 from social_protection.models import (
     BenefitPlan,
@@ -42,6 +42,11 @@ def patch_details(beneficiary_df: pd.DataFrame):
     df_final = pd.concat([beneficiary_df, df_unfolded], axis=1)
     df_final = df_final.drop('json_ext', axis=1)
     return df_final
+
+
+class BfTypeEnum(graphene.Enum):
+    INDIVIDUAL = BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE
+    GROUP = BenefitPlan.BenefitPlanType.GROUP_TYPE
 
 
 class Query(ExportableQueryMixin, graphene.ObjectType):
@@ -111,6 +116,11 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         ValidationMessageGQLType,
         bf_schema=graphene.String(required=True),
         description="Checks that the specified Benefit Plan schema is valid"
+    )
+    benefit_plan_schema_field = graphene.Field(
+        BenefitPlanSchemaFieldsGQLType,
+        bf_type=graphene.Argument(BfTypeEnum),
+        description="Endpoint responsible for getting all fields from all BF schemas"
     )
 
     def resolve_bf_code_validity(self, info, **kwargs):
@@ -228,6 +238,21 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             SocialProtectionConfig.gql_beneficiary_search_perms
         )
         query = BenefitPlanDataUploadRecords.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
+    def resolve_benefit_plan_schema_field(self, info, **kwargs):
+        filters = append_validity_filter(**kwargs)
+
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_schema_search_perms
+        )
+
+        bf_type = kwargs.get("bf_type", None)
+        if bf_type:
+            filters.append(Q(type=bf_type))
+
+        query = BenefitPlan.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
     @staticmethod
