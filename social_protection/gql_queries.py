@@ -119,7 +119,7 @@ class BenefitPlanSchemaFieldsGQLType(ObjectType):
     schema_fields = graphene.List(graphene.String)
 
     def resolve_schema_fields(self, info, **kwargs):
-        schemas = self.values_list("json_ext__properties", flat=True)
+        schemas = self.values_list("beneficiary_data_schema__properties", flat=True)
         field_list = set(
             f'json_ext__{field}'
             for schema in schemas  # Iterate over each schema
