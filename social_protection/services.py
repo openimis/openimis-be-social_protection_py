@@ -312,5 +312,4 @@ class BeneficiaryImportService:
             percentage_of_invalid_items = (number_of_invalid_items / total_items) * 100
 
         percentage_of_invalid_items = round(percentage_of_invalid_items, 2)
-
         return percentage_of_invalid_items
