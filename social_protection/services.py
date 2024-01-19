@@ -302,14 +302,14 @@ class BeneficiaryImportService:
         ).values_list('uuid', flat=True))
 
     def __calculate_percentage_of_invalid_items(self, upload_id):
-        total_items = len(self.__fetch_summary_of_broken_items(upload_id)) + len(
-            self.__fetch_summary_of_valid_items(upload_id))
+        number_of_valid_items = len(self.__fetch_summary_of_valid_items(upload_id))
+        number_of_invalid_items = len(self.__fetch_summary_of_broken_items(upload_id))
+        total_items = number_of_invalid_items + number_of_valid_items
 
         if total_items == 0:
             percentage_of_invalid_items = 0
         else:
-            invalid_items = len(self.__fetch_summary_of_broken_items(upload_id))
-            percentage_of_invalid_items = (invalid_items / total_items) * 100
+            percentage_of_invalid_items = (number_of_invalid_items / total_items) * 100
 
         percentage_of_invalid_items = round(percentage_of_invalid_items, 2)
 
