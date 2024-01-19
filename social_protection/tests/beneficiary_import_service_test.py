@@ -3,6 +3,7 @@ from social_protection.models import BenefitPlan
 from individual.models import IndividualDataSource, IndividualDataSourceUpload
 from social_protection.services import BeneficiaryImportService
 from social_protection.tests.helpers import LogInHelper
+from social_protection.tests.data import service_add_payload
 from individual.models import Individual
 from individual.tests.data import service_add_individual_payload
 import pandas as pd
@@ -18,7 +19,7 @@ class BeneficiaryImportServiceTest(TestCase):
         super().setUpClass()
         cls.user = LogInHelper().get_or_create_user_api()
         cls.service = BeneficiaryImportService(cls.user)
-        cls.benefit_plan = BenefitPlan.objects.create(code="BP2", name="Benefit Plan 2")
+        cls.benefit_plan = cls.__create_benefit_plan()
         cls.upload = cls.__create_individual_data_source_upload()
         cls.individual_sources = cls.__create_individual_sources(cls.upload)
 
@@ -78,6 +79,17 @@ class BeneficiaryImportServiceTest(TestCase):
         individual.save(username=cls.user.username)
 
         return individual
+
+    @classmethod
+    def __create_benefit_plan(cls):
+        object_data = {
+            **service_add_payload
+        }
+
+        benefit_plan = BenefitPlan(**object_data)
+        benefit_plan.save(username=cls.user.username)
+
+        return benefit_plan
 
     @classmethod
     def __create_individual_sources(cls, upload):
