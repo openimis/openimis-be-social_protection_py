@@ -38,7 +38,7 @@ class BeneficiaryImportServiceTest(TestCase):
 
     def test_validate_possible_beneficiares(self):
         dataframe = self.service._load_dataframe(self.individual_sources)
-        validated_dataframe, invalid_items = self._validate_possible_beneficiaries(
+        validated_dataframe, invalid_items = self.service._validate_possible_beneficiaries(
             dataframe,
             self.benefit_plan,
             self.upload.id
