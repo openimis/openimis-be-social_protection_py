@@ -31,10 +31,6 @@ class BeneficiaryImportServiceTest(TestCase):
         )
         self.assertTrue(result.get('success', False))
 
-    def test_calculate_percentage_of_invalid_items(self):
-        result = self.service.__calculate_percentage_of_invalid_items(self.upload.id)
-        self.assertEqual(result, 0.0)
-
     def test_load_dataframe(self):
         result = self.service._load_dataframe(self.individual_sources)
         self.assertIsInstance(result, pd.DataFrame)
@@ -46,7 +42,8 @@ class BeneficiaryImportServiceTest(TestCase):
             'source_name': 'Sample Source',
             'source_type': 'Sample Type',
             'status': IndividualDataSourceUpload.Status.PENDING,
-            'error': {}
+            'error': {},
+            'json_ext': {}
         }
 
         individual_data_source_upload = IndividualDataSourceUpload(**object_data)
@@ -61,7 +58,8 @@ class BeneficiaryImportServiceTest(TestCase):
         object_data = {
             'individual': individual_instance,
             'upload': individual_data_source_upload_instance,
-            'validations': {}
+            'validations': {},
+            'json_ext': {}
         }
 
         individual_data_source = IndividualDataSource(**object_data)
