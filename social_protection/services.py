@@ -278,8 +278,7 @@ class BeneficiaryImportService:
             'workflow': upload_record.workflow,
             'percentage_of_invalid_items': self.__calculate_percentage_of_invalid_items(upload_id),
         }
-        logger.debug(json_ext)
-        s = TaskService(user).create({
+        TaskService(user).create({
             'source': 'import_valid_items',
             'entity': upload_record,
             'status': Task.Status.RECEIVED,
@@ -287,7 +286,6 @@ class BeneficiaryImportService:
             'business_event': SocialProtectionConfig.validation_import_valid_items,
             'json_ext': json_ext
         })
-        logger.debug(s)
 
     def __fetch_summary_of_broken_items(self, upload_id):
         return list(IndividualDataSource.objects.filter(
@@ -312,5 +310,7 @@ class BeneficiaryImportService:
         else:
             invalid_items = len(self.__fetch_summary_of_broken_items(upload_id))
             percentage_of_invalid_items = (invalid_items / total_items) * 100
+
+        percentage_of_invalid_items = round(percentage_of_invalid_items, 2)
 
         return percentage_of_invalid_items
