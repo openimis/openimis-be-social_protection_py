@@ -273,9 +273,9 @@ class BeneficiaryImportService:
             is_deleted=False
         )
         json_ext = {
-            'benefit_plan_code': {benefit_plan.code},
-            'source_name': {upload_record.data_upload.source_name},
-            'workflow': {upload_record.workflow},
+            'benefit_plan_code': benefit_plan.code,
+            'source_name': upload_record.data_upload.source_name,
+            'workflow': upload_record.workflow,
             'percentage_of_invalid_items': self.__calculate_percentage_of_invalid_items(upload_id),
         }
         logger.debug(json_ext)
