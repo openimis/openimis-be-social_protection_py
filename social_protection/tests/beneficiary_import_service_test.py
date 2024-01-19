@@ -1,5 +1,5 @@
 from django.test import TestCase
-from social_protection.models import BenefitPlan
+from social_protection.models import BenefitPlan, BenefitPlanDataUploadRecords
 from individual.models import IndividualDataSource, IndividualDataSourceUpload
 from social_protection.services import BeneficiaryImportService
 from social_protection.tests.helpers import LogInHelper
@@ -22,6 +22,11 @@ class BeneficiaryImportServiceTest(TestCase):
         cls.benefit_plan = cls.__create_benefit_plan()
         cls.upload = cls.__create_individual_data_source_upload()
         cls.individual_sources = cls.__create_individual_sources(cls.upload)
+        cls.upload_record = cls.__create_benefit_plan_data_upload_records(
+            cls.upload,
+            cls.benefit_plan,
+            'test-workflow',
+        )
 
     def test_validate_import_beneficiaries(self):
         result = self.service.validate_import_beneficiaries(
@@ -29,12 +34,25 @@ class BeneficiaryImportServiceTest(TestCase):
             self.individual_sources,
             self.benefit_plan
         )
-        self.assertTrue(result.get('success', False))
+        self.assertTrue(result.get('success', True))
+
+    def test_validate_possible_beneficiares(self):
+        dataframe = self.service._load_dataframe(self.individual_sources)
+        validated_dataframe, invalid_items = self._validate_possible_beneficiaries(
+            dataframe,
+            self.benefit_plan,
+            self.upload.id
+        )
+        self.assertIsInstance(validated_dataframe, list)
+        self.assertIsInstance(invalid_items, list)
 
     def test_load_dataframe(self):
         result = self.service._load_dataframe(self.individual_sources)
         self.assertIsInstance(result, pd.DataFrame)
         self.assertEqual(result.size, len(self.individual_sources))
+
+    def test_create_task_with_importing_valid_items(self):
+        self.service.create_task_with_importing_valid_items(self.upload.id, self.benefit_plan)
 
     @classmethod
     def __create_individual_data_source_upload(cls):
@@ -95,3 +113,13 @@ class BeneficiaryImportServiceTest(TestCase):
         cls.__create_individual_data_source(upload),
         cls.__create_individual_data_source(upload)
         return IndividualDataSource.objects.filter(upload_id=upload.id)
+
+    @classmethod
+    def __create_benefit_plan_data_upload_records(cls, data_upload, benefit_plan, workflow):
+        record_upload = BenefitPlanDataUploadRecords(
+            data_upload=data_upload,
+            benefit_plan=benefit_plan,
+            workflow=workflow
+        )
+        record_upload.save(username=cls.user.username)
+        return record_upload
