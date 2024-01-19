@@ -272,12 +272,19 @@ class BeneficiaryImportService:
             benefit_plan=benefit_plan,
             is_deleted=False
         )
+        json_ext = {
+            'benefit_plan_code': {benefit_plan.code},
+            'source_name': {upload_record.data_upload.source_name},
+            'workflow': {upload_record.workflow},
+            'percentage_of_invalid_items': self.__calculate_percentage_of_invalid_items(upload_id),
+        }
         TaskService(user).create({
             'source': 'import_valid_items',
             'entity': upload_record,
             'status': Task.Status.RECEIVED,
             'executor_action_event': TasksManagementConfig.default_executor_event,
             'business_event': SocialProtectionConfig.validation_import_valid_items,
+            'json_ext': json_ext
         })
 
     def __fetch_summary_of_broken_items(self, upload_id):
@@ -286,3 +293,22 @@ class BeneficiaryImportService:
             Q(upload_id=upload_id) &
             ~Q(validations__validation_errors=[])
         ).values_list('uuid', flat=True))
+
+    def __fetch_summary_of_valid_items(self, upload_id):
+        return list(IndividualDataSource.objects.filter(
+            Q(is_deleted=False) &
+            Q(upload_id=upload_id) &
+            Q(validations__validation_errors=[])
+        ).values_list('uuid', flat=True))
+
+    def __calculate_percentage_of_invalid_items(self, upload_id):
+        total_items = len(self.__fetch_summary_of_broken_items(upload_id)) + len(
+            self.__fetch_summary_of_valid_items(upload_id))
+
+        if total_items == 0:
+            percentage_of_invalid_items = 0
+        else:
+            invalid_items = len(self.__fetch_summary_of_broken_items(upload_id))
+            percentage_of_invalid_items = (invalid_items / total_items) * 100
+
+        return percentage_of_invalid_items
