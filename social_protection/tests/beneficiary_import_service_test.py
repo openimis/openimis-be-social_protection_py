@@ -1,5 +1,6 @@
 from django.test import TestCase
-from social_protection.models import BenefitPlan, IndividualDataSource, IndividualDataSourceUpload
+from social_protection.models import BenefitPlan
+from individual.models import IndividualDataSource, IndividualDataSourceUpload
 from social_protection.services import BeneficiaryImportService
 from social_protection.tests.helpers import LogInHelper
 from individual.models import Individual
@@ -17,7 +18,7 @@ class BeneficiaryImportServiceTest(TestCase):
         super().setUpClass()
         cls.user = LogInHelper().get_or_create_user_api()
         cls.service = BeneficiaryImportService(cls.user)
-        cls.benefit_plan = BenefitPlan.objects.create(code="BP1", name="Benefit Plan 1")
+        cls.benefit_plan = BenefitPlan.objects.create(code="BP2", name="Benefit Plan 2")
         cls.upload = cls.__create_individual_data_source_upload()
         cls.individual_sources = cls.__create_individual_sources(cls.upload)
 
