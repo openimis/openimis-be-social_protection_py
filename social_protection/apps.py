@@ -20,6 +20,11 @@ DEFAULT_CONFIG = {
     "gql_check_benefit_plan_update": True,
     "gql_check_beneficiary_crud": True,
     "gql_check_group_beneficiary_crud": True,
+    "unique_class_validation": "DeduplicationValidationStrategy",
+    "validation_calculation_uuid": "4362f958-5894-435b-9bda-df6cadf88352",
+    "validation_import_valid_items": "validation.import_valid_items",
+    "validation_download_invalid_items": "validation.download_invalid_items",
+    "validation_import_valid_items_workflow": "beneficiary-import-valid-items"
 }
 
 
@@ -43,6 +48,11 @@ class SocialProtectionConfig(AppConfig):
     gql_check_benefit_plan_update = None
     gql_check_beneficiary_crud = None
     gql_check_group_beneficiary_crud = None
+    unique_class_validation = None
+    validation_calculation_uuid = None
+    validation_import_valid_items = None
+    validation_download_invalid_items = None
+    validation_import_valid_items_workflow = None
 
     def ready(self):
         from core.models import ModuleConfiguration
