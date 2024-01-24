@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AnonymousUser
 from django.db import models
+from django.db.models import Func
 from django.utils.translation import gettext as _
 from pydantic.error_wrappers import ValidationError
 
@@ -73,3 +74,8 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
             raise ValidationError(_("Group beneficiary must be associated with a group benefit plan."))
 
         super().clean()
+
+
+class JSONUpdate(Func):
+    function = 'JSONB_SET'
+    arity = 3
