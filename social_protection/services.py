@@ -4,7 +4,9 @@ import uuid
 import pandas as pd
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
-from django.db.models import Q
+from django.db import models
+from django.db.models import Q, Value, Func, F
+from django.db.models.functions import Concat
 from pandas import DataFrame
 
 from calculation.services import get_calculation_object
@@ -140,6 +142,10 @@ class BeneficiaryImportService:
 
     def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
         self._create_import_valid_items_task(benefit_plan, upload_id, self.user)
+
+    def synchronize_data_for_reporting(self, upload_id: uuid, benefit_plan: BenefitPlan):
+        self._synchronize_individual(upload_id)
+        self._synchronize_beneficiary(benefit_plan, upload_id)
 
     def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid):
         schema_dict = benefit_plan.beneficiary_data_schema
@@ -277,6 +283,36 @@ class BeneficiaryImportService:
             'business_event': SocialProtectionConfig.validation_import_valid_items,
             'json_ext': json_ext
         })
+
+    def _synchronize_individual(self, upload_id):
+        synch_status = {'report_synch': 'true'}
+        individuals_to_update = Individual.objects.filter(
+            individualdatasource__upload=upload_id
+        )
+        for individual in individuals_to_update:
+            if individual.json_ext:
+                individual.json_ext.update(synch_status)
+            else:
+                individual.json_ext = synch_status
+            individual.save(username=self.user.username)
+
+    def _synchronize_beneficiary(self, benefit_plan, upload_id):
+        synch_status = {'report_synch': 'true'}
+        unique_uuids = list((
+            Beneficiary.objects
+                .filter(benefit_plan=benefit_plan, individual__individualdatasource__upload_id=upload_id)
+                .values_list('id', flat=True)
+                .distinct()
+        ))
+        beneficiaries = Beneficiary.objects.filter(
+            id__in=unique_uuids
+        )
+        for beneficiary in beneficiaries:
+            if beneficiary.json_ext:
+                beneficiary.json_ext.update(synch_status)
+            else:
+                beneficiary.json_ext = synch_status
+            beneficiary.save(username=self.user.username)
 
     def __fetch_summary_of_broken_items(self, upload_id):
         return list(IndividualDataSource.objects.filter(
