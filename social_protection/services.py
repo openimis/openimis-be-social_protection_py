@@ -18,8 +18,7 @@ from social_protection.models import (
     BenefitPlan,
     Beneficiary,
     BenefitPlanDataUploadRecords,
-    GroupBeneficiary,
-    JSONUpdate
+    GroupBeneficiary
 )
 from social_protection.validation import (
     BeneficiaryValidation,
@@ -286,15 +285,16 @@ class BeneficiaryImportService:
         })
 
     def _synchronize_individual(self, upload_id):
+        synch_status = {'report_synch': 'true'}
         individuals_to_update = Individual.objects.filter(
             individualdatasource__upload=upload_id
         )
-        individuals_to_update.update(json_ext=JSONUpdate(
-            F('json_ext'),
-            Value('{report_synch}'),
-            Value('true'),
-            output_field=models.JSONField()
-        ))
+        for individual in individuals_to_update:
+            if individual.json_ext:
+                individual.json_ext.update(synch_status)
+            else:
+                individual.json_ext = synch_status
+            individual.save(username=self.user.username)
 
     def _synchronize_beneficiary(self, benefit_plan, upload_id):
         synch_status = {'report_synch': 'true'}
