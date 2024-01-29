@@ -251,7 +251,7 @@ class UpdateBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
             data.pop('client_mutation_label')
 
         service = BeneficiaryService(user)
-        if SocialProtectionConfig.gql_check_beneficiary_crud:
+        if False:
             res = service.create_update_task(data)
         else:
             res = service.update(data)
