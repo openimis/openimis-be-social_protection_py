@@ -1,3 +1,4 @@
+import copy
 import logging
 import uuid
 
@@ -24,7 +25,8 @@ from social_protection.validation import (
     BeneficiaryValidation,
     BenefitPlanValidation, GroupBeneficiaryValidation
 )
-from tasks_management.services import UpdateCheckerLogicServiceMixin, CheckerLogicServiceMixin
+from tasks_management.services import UpdateCheckerLogicServiceMixin, CheckerLogicServiceMixin, \
+    crud_business_data_builder
 from workflow.systems.base import WorkflowHandler
 from core.models import User
 
@@ -68,19 +70,23 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
     def delete(self, obj_data):
         return super().delete(obj_data)
 
-    def _business_data_serializer(self, key, value):
-        if key == 'id':
-            beneficiary = Beneficiary.objects.get(id=value)
-            individual = beneficiary.individual
-            return f'{individual.first_name} {individual.last_name}'
-        elif key == 'benefit_plan_id':
-            benefit_plan = BenefitPlan.objects.get(id=value)
-            return benefit_plan.__str__()
-        elif key == 'individual_id':
-            individual = Individual.objects.get(id=value)
-            return f'{individual.first_name} {individual.last_name}'
-        else:
-            return value
+    def _business_data_serializer(self, data):
+        def serialize(key, value):
+            if key == 'id':
+                beneficiary = Beneficiary.objects.get(id=value)
+                individual = beneficiary.individual
+                return f'{individual.first_name} {individual.last_name}'
+            elif key == 'benefit_plan_id':
+                benefit_plan = BenefitPlan.objects.get(id=value)
+                return benefit_plan.__str__()
+            elif key == 'individual_id':
+                individual = Individual.objects.get(id=value)
+                return f'{individual.first_name} {individual.last_name}'
+            else:
+                return value
+
+        serialized_data = crud_business_data_builder(data, serialize)
+        return serialized_data
 
 
 class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
