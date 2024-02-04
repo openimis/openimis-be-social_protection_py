@@ -1,6 +1,5 @@
 import graphene
 import pandas as pd
-import re
 
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
@@ -12,7 +11,7 @@ from django.utils.translation import gettext as _
 from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
-from core.utils import append_validity_filter
+from core.utils import append_validity_filter, validate_json_schema
 from social_protection.apps import SocialProtectionConfig
 from social_protection.gql_mutations import (
     CreateBenefitPlanMutation,
@@ -31,7 +30,7 @@ from social_protection.models import (
     BenefitPlan,
     Beneficiary, GroupBeneficiary, BenefitPlanDataUploadRecords
 )
-from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name, validate_json_schema
+from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name
 import graphene_django_optimizer as gql_optimizer
 
 
