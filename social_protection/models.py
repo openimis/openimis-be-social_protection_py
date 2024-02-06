@@ -41,7 +41,7 @@ class Beneficiary(core_models.HistoryBusinessModel):
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     status = models.CharField(max_length=100, choices=BeneficiaryStatus.choices, null=False)
 
-    json_ext = models.JSONField(db_column="Json_ext", default=dict)
+    json_ext = models.JSONField(db_column="Json_ext", blank=True, default=dict)
 
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE:
@@ -66,7 +66,7 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     status = models.CharField(max_length=100, choices=BeneficiaryStatus.choices, null=False)
 
-    json_ext = models.JSONField(db_column="Json_ext", default=dict)
+    json_ext = models.JSONField(db_column="Json_ext", blank=True, default=dict)
 
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.GROUP_TYPE:
