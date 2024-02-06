@@ -121,6 +121,25 @@ def download_invalid_items(request):
         return Response({'success': False, 'error': str(exc)}, status=500)
 
 
+@api_view(["POST"])
+@permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
+def synchronize_data_for_reporting(request):
+    try:
+        user = request.user
+        upload_id, benefit_plan = _resolve_synchronize_data_for_reporting(request)
+        BeneficiaryImportService(user).synchronize_data_for_reporting(
+            upload_id,
+            benefit_plan
+        )
+        return Response({'success': True, 'error': None}, status=201)
+    except ValueError as exc:
+        logger.error("Error while sending callback to openIMIS", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=400)
+    except Exception as exc:
+        logger.error("Unexpected error while sending callback to openIMIS", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=500)
+
+
 def _resolve_import_beneficiaries_args(request):
     import_file = request.FILES.get('file')
     benefit_plan_uuid = request.POST.get('benefit_plan')
@@ -170,6 +189,18 @@ def _resolve_validate_import_beneficiaries_args(request):
 
 
 def _resolve_create_task_with_importing_valid_items(request):
+    benefit_plan_uuid = request.data.get('benefit_plan')
+    upload_id = request.data.get('upload_id')
+
+    benefit_plan = BenefitPlan.objects.filter(uuid=benefit_plan_uuid, is_deleted=False).first()
+
+    if not benefit_plan:
+        raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
+
+    return upload_id, benefit_plan
+
+
+def _resolve_synchronize_data_for_reporting(request):
     benefit_plan_uuid = request.data.get('benefit_plan')
     upload_id = request.data.get('upload_id')
 
