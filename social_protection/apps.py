@@ -26,7 +26,7 @@ DEFAULT_CONFIG = {
     "validation_download_invalid_items": "validation.download_invalid_items",
     "validation_import_valid_items_workflow": "beneficiary-import-valid-items",
 
-    "enable_python_workflows": True
+    "enable_python_workflows": False
 }
 
 
