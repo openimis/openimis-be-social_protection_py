@@ -361,3 +361,13 @@ report containing the invalid items. After reviewing the report, the user can pr
 The report containing invalid items can be downloaded from the upload history on the benefit plan page.
 * When a user accepts the valid items from an import that faced issues with some invalid items and there are no errors in this workflow, 
 the status of the import is marked as `PARTIAL_SUCCESS`. This triggers the `beneficiary-import-valid-items` workflow in such cases. 
+
+
+### Enabling Python Workflows
+Module comes with simple workflows for data upload. 
+They should be used for the development purposes, not in production environment. 
+To activate these Python workflows, a configuration change is required. 
+Specifically, the `enable_python_workflows` parameter to `true` within module config.
+
+Workflows: 
+ * beneficiary upload

@@ -1,4 +1,5 @@
 import copy
+import json
 import logging
 import uuid
 
@@ -21,6 +22,7 @@ from social_protection.models import (
     BenefitPlanDataUploadRecords,
     GroupBeneficiary
 )
+from social_protection.utils import load_dataframe
 from social_protection.validation import (
     BeneficiaryValidation,
     BenefitPlanValidation, GroupBeneficiaryValidation
@@ -28,6 +30,7 @@ from social_protection.validation import (
 from tasks_management.services import UpdateCheckerLogicServiceMixin, CheckerLogicServiceMixin, \
     crud_business_data_builder
 from workflow.systems.base import WorkflowHandler
+from workflow.util import result as WorkflowExecutionResult
 from core.models import User
 
 logger = logging.getLogger(__name__)
@@ -124,18 +127,23 @@ class BeneficiaryImportService:
         super().__init__()
         self.user = user
 
-    @transaction.atomic
     @register_service_signal('benefit_plan.import_beneficiaries')
     def import_beneficiaries(self,
                              import_file: InMemoryUploadedFile,
                              benefit_plan: BenefitPlan,
                              workflow: WorkflowHandler):
+        upload = self._save_sources(import_file)
+        self._trigger_workflow(workflow, upload, benefit_plan)
+        return {'success': True, 'data': {'upload_uuid': upload.uuid}}
+
+    @transaction.atomic
+    def _save_sources(self, import_file):
+        # Method separated as workflow execution must be independent of the atomic transaction.
         upload = self._create_upload_entry(import_file.name)
         dataframe = self._load_import_file(import_file)
         self._validate_dataframe(dataframe)
         self._save_data_source(dataframe, upload)
-        self._trigger_workflow(workflow, upload, benefit_plan)
-        return {'success': True, 'data': {'upload_uuid': upload.uuid}}
+        return upload
 
     def validate_import_beneficiaries(self, upload_id: uuid, individual_sources, benefit_plan: BenefitPlan):
         dataframe = self._load_dataframe(individual_sources)
@@ -145,6 +153,7 @@ class BeneficiaryImportService:
             upload_id
         )
         return {'success': True, 'data': validated_dataframe, 'summary_invalid_items': invalid_items}
+
 
     def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
         self._create_import_valid_items_task(benefit_plan, upload_id, self.user)
@@ -226,30 +235,37 @@ class BeneficiaryImportService:
         dataframe.apply(self._save_row, axis='columns', args=(upload,))
 
     def _save_row(self, row, upload):
-        ds = IndividualDataSource(upload=upload, json_ext=row.to_dict(), validations={})
+        ds = IndividualDataSource(upload=upload, json_ext=json.loads(row.to_json()), validations={})
         ds.save(username=self.user.login_name)
 
     def _load_dataframe(self, individual_sources) -> pd.DataFrame:
-        data_from_source = []
-        for individual_source in individual_sources:
-            json_ext = individual_source.json_ext
-            individual_source.json_ext["id"] = individual_source.id
-            data_from_source.append(json_ext)
-        recreated_df = pd.DataFrame(data_from_source)
-        return recreated_df
+        return load_dataframe(individual_sources)
 
     def _trigger_workflow(self,
                           workflow: WorkflowHandler,
                           upload: IndividualDataSourceUpload,
                           benefit_plan: BenefitPlan):
-        workflow.run({
-            # Core user UUID required
-            'user_uuid': str(User.objects.get(username=self.user.login_name).id),
-            'benefit_plan_uuid': str(benefit_plan.uuid),
-            'upload_uuid': str(upload.uuid),
-        })
-        upload.status = IndividualDataSourceUpload.Status.TRIGGERED
-        upload.save(username=self.user.login_name)
+        try:
+            # Before the run in order to avoid racing conditions
+            upload.status = IndividualDataSourceUpload.Status.TRIGGERED
+            upload.save(username=self.user.login_name)
+
+            result = workflow.run({
+                # Core user UUID required
+                'user_uuid': str(User.objects.get(username=self.user.login_name).id),
+                'benefit_plan_uuid': str(benefit_plan.uuid),
+                'upload_uuid': str(upload.uuid),
+            })
+
+            # Conditions are safety measure for workflows. Usually handles like PythonHandler or LightningHandler
+            #  should follow this pattern but return type is not determined in workflow.run abstract.
+            if result and isinstance(result, dict) and result.get('success') is False:
+                raise ValueError(result.get('message', 'Unexpected error during the workflow execution'))
+        except ValueError as e:
+            upload.status = IndividualDataSourceUpload.Status.FAIL
+            upload.error = {'workflow': str(e)}
+            upload.save(username=self.user.login_name)
+            return upload
 
     def __save_validation_error_in_data_source(self, row, field_validation):
         error_fields = []
