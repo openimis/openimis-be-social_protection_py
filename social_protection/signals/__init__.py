@@ -4,6 +4,7 @@ from core.service_signals import ServiceSignalBindType
 from core.signals import bind_service_signal
 from social_protection.services import BenefitPlanService, BeneficiaryService, GroupBeneficiaryService
 from social_protection.signals.on_benefit_plan_data_upload import on_benefit_plan_data_upload
+from social_protection.signals.on_confirm_enrollment_of_individual import on_confirm_enrollment_of_individual
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_validation_import_valid_items
 from tasks_management.services import on_task_complete_service_handler
 
@@ -34,5 +35,10 @@ def bind_service_signals():
     bind_service_signal(
         'task_service.complete_task',
         on_task_complete_validation_import_valid_items,
+        bind_type=ServiceSignalBindType.AFTER
+    )
+    bind_service_signal(
+        'individual_service.select_individuals_to_benefit_plan',
+        on_confirm_enrollment_of_individual,
         bind_type=ServiceSignalBindType.AFTER
     )
