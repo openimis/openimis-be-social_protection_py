@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
     "validation_import_valid_items": "validation.import_valid_items",
     "validation_download_invalid_items": "validation.download_invalid_items",
     "validation_import_valid_items_workflow": "beneficiary-import-valid-items",
-    "enable_maker_checker_logic_enrollment": True,
+    "enable_maker_checker_logic_enrollment": False,
 
     "enable_python_workflows": False
 }
