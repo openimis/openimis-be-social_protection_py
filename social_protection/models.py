@@ -5,6 +5,7 @@ from django.utils.translation import gettext as _
 from pydantic.error_wrappers import ValidationError
 
 from core import models as core_models
+from core.models import UUIDModel, ObjectMutation, MutationLog
 from individual.models import Individual, Group, IndividualDataSourceUpload
 
 
@@ -35,6 +36,11 @@ class BenefitPlan(core_models.HistoryBusinessModel):
 
     def __str__(self):
         return f'Benefit Plan {self.code}'
+
+
+class BenefitPlanMutation(UUIDModel, ObjectMutation):
+    benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='benefit_plan')
 
 
 class Beneficiary(core_models.HistoryBusinessModel):
