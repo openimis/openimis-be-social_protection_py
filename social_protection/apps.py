@@ -97,3 +97,9 @@ class SocialProtectionConfig(AppConfig):
             module_name=cls.name,
             custom_filter_class_list=[BenefitPlanCustomFilterWizard]
         )
+
+    @staticmethod
+    def get_beneficiary_upload_file_path(benefit_plan_id, file_name=None):
+        if file_name:
+            return f"beneficiary_upload/benefit_plan_{benefit_plan_id}/{file_name}"
+        return f"beneficiary_upload/benefit_plan_{benefit_plan_id}"
