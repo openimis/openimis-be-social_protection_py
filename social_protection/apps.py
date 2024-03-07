@@ -28,10 +28,14 @@ DEFAULT_CONFIG = {
     "validation_import_valid_items": "validation.import_valid_items",
     "validation_upload_valid_items": "validation.upload_valid_items",
     "validation_download_invalid_items": "validation.download_invalid_items",
+
     "validation_import_valid_items_workflow": "beneficiary-import-valid-items.beneficiary-import-valid-items",
     "validation_upload_valid_items_workflow": "beneficiary-upload-valid-items.beneficiary-upload-valid-items",
 
-    "enable_python_workflows": True
+    "enable_maker_checker_logic_enrollment": False,
+
+
+    "enable_python_workflows": False
 }
 
 
@@ -67,6 +71,7 @@ class SocialProtectionConfig(AppConfig):
     enable_maker_checker_for_beneficiary_update = None
 
     enable_python_workflows = None
+    enable_maker_checker_logic_enrollment = None
 
     def ready(self):
         from core.models import ModuleConfiguration

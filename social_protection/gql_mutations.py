@@ -9,7 +9,7 @@ from core.schema import OpenIMISMutation
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan,
-    Beneficiary, GroupBeneficiary, BeneficiaryStatus
+    Beneficiary, GroupBeneficiary, BeneficiaryStatus, BenefitPlanMutation
 )
 from social_protection.services import (
     BenefitPlanService,
@@ -105,13 +105,18 @@ class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
 
     @classmethod
     def _mutate(cls, user, **data):
-        if "client_mutation_id" in data:
-            data.pop('client_mutation_id')
+        client_mutation_id = data.pop('client_mutation_id', None)
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
         service = BenefitPlanService(user)
         res = service.create(data)
+        if client_mutation_id and res['success']:
+            payroll_id = res['data']['id']
+            benefit_plan = BenefitPlan.objects.get(id=payroll_id)
+            BenefitPlanMutation.object_mutated(
+                user, client_mutation_id=client_mutation_id, benefit_plan=benefit_plan
+            )
         if not res['success']:
             return res
         return None
