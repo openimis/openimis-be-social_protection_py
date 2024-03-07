@@ -225,6 +225,20 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         query = GroupBeneficiary.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
+    def resolve_awaiting_beneficiary(self, info, **kwargs):
+        filters = append_validity_filter(**kwargs)
+
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_beneficiary_search_perms
+        )
+        query = GroupBeneficiary.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
     def resolve_beneficiary_data_upload_history(self, info, **kwargs):
         filters = append_validity_filter(**kwargs)
 

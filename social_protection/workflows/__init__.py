@@ -21,3 +21,7 @@ Development Use and Efficiency Considerations
 
 """
 from social_protection.workflows.base_beneficiary_upload import process_import_beneficiaries_workflow
+from social_protection.workflows.base_beneficiary_update import process_update_beneficiaries_workflow
+
+from social_protection.workflows.beneficiary_update_valid import process_update_valid_beneficiaries_workflow
+from social_protection.workflows.beneficiary_upload_valid import process_import_valid_beneficiaries_workflow
