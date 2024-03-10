@@ -3,6 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from graphene import ObjectType
 from graphene_django import DjangoObjectType
 
+from contribution_plan.models import PaymentPlan
 from core import prefix_filterset, ExtendedConnection
 from individual.gql_queries import IndividualGQLType, GroupGQLType, \
     IndividualDataSourceUploadGQLType
@@ -27,6 +28,7 @@ class JsonExtMixin:
 
 class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
+    has_payment_plans = graphene.Boolean()
 
     class Meta:
         model = BenefitPlan
@@ -52,6 +54,9 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
         if _have_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms):
             return self.beneficiary_data_schema
         return None
+
+    def resolve_has_payment_plans(self, info):
+        return PaymentPlan.objects.filter(benefit_plan_id=self.id).exists()
 
 
 class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
