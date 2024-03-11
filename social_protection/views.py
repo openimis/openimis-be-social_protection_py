@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
 def import_beneficiaries(request):
     import_file = None
+    benefit_plan = None
     try:
         user = request.user
         import_file, workflow, benefit_plan = _resolve_import_beneficiaries_args(request)
@@ -33,8 +34,8 @@ def import_beneficiaries(request):
 
         return Response(result)
     except ValueError as e:
-        if import_file:
-            _remove_file(import_file)
+        if import_file and benefit_plan:
+            _remove_file(benefit_plan, import_file)
         logger.error("Error while uploading individuals", exc_info=e)
         return Response({'success': False, 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except FileExistsError as e:
@@ -252,7 +253,7 @@ def _handle_file_upload(file, benefit_plan):
         raise exc
 
 
-def _remove_file(file):
-    target_file_path = IndividualConfig.get_individual_upload_file_path(file.name)
+def _remove_file(benefit_plan, file):
+    target_file_path = SocialProtectionConfig.get_beneficiary_upload_file_path(benefit_plan.id, file.name)
     file_handler = DefaultStorageFileHandler(target_file_path)
     file_handler.remove_file()
