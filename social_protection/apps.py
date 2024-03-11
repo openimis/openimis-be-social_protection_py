@@ -35,7 +35,7 @@ DEFAULT_CONFIG = {
     "enable_maker_checker_logic_enrollment": False,
 
 
-    "enable_python_workflows": False
+    "enable_python_workflows": True
 }
 
 

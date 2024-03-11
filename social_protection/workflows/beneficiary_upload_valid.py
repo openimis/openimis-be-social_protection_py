@@ -93,10 +93,26 @@ BEGIN
         WHERE iids.upload_id=current_upload_id and iids."isDeleted"=false
         returning "UUID")
         
-        -- Update status based on conditions met after previous operations
-        UPDATE individual_individualdatasourceupload
-        SET status = 'SUCCESS', error = '{}'  -- Simplify the status update logic for demonstration
-        WHERE "UUID" = current_upload_id;
+        -- Change status to SUCCESS if no invalid items, change to PARTIAL_SUCCESS otherwise 
+            UPDATE individual_individualdatasourceupload
+            SET 
+                status = CASE
+                    WHEN (
+                        SELECT count(*) 
+                        FROM individual_individualdatasource
+                        WHERE upload_id=current_upload_id
+                            AND "isDeleted"=FALSE
+                            AND validations ->> 'validation_errors' = '[]'
+                    ) = (
+                        SELECT count(*) 
+                        FROM individual_individualdatasource
+                        WHERE upload_id=current_upload_id
+                            AND "isDeleted"=FALSE
+                    ) THEN 'SUCCESS'
+                    ELSE 'PARTIAL_SUCCESS'
+                END,
+                error = '{}'
+            WHERE "UUID" = current_upload_id;
     END IF;
 EXCEPTION WHEN OTHERS THEN
     UPDATE individual_individualdatasourceupload SET status = 'FAIL', error = jsonb_build_object(

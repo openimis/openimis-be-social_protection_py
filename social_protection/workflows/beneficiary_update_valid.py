@@ -114,7 +114,26 @@ BEGIN
         and individual_individualdatasource."UUID" = u.individualdatasource_id
         and validations ->> 'validation_errors' = '[]';
             
-            update individual_individualdatasourceupload set status='SUCCESS', error='{}' where "UUID" = current_upload_id;
+            -- Change status to SUCCESS if no invalid items, change to PARTIAL_SUCCESS otherwise 
+            UPDATE individual_individualdatasourceupload
+            SET 
+                status = CASE
+                    WHEN (
+                        SELECT count(*) 
+                        FROM individual_individualdatasource
+                        WHERE upload_id=current_upload_id
+                            AND "isDeleted"=FALSE
+                            AND validations ->> 'validation_errors' = '[]'
+                    ) = (
+                        SELECT count(*) 
+                        FROM individual_individualdatasource
+                        WHERE upload_id=current_upload_id
+                            AND "isDeleted"=FALSE
+                    ) THEN 'SUCCESS'
+                    ELSE 'PARTIAL_SUCCESS'
+                END,
+                error = '{}'
+            WHERE "UUID" = current_upload_id;
             EXCEPTION
               WHEN OTHERS then
   

@@ -7,7 +7,6 @@ from social_protection.services import BenefitPlanService, BeneficiaryService, G
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_import_validated, \
     on_task_resolve
 
-from social_protection.signals.on_benefit_plan_data_upload import on_benefit_plan_data_upload
 from social_protection.signals.on_confirm_enrollment_of_individual import on_confirm_enrollment_of_individual
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_import_validated, \
     on_task_resolve
