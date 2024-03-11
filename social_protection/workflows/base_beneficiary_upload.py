@@ -1,87 +1,17 @@
-import json
 import logging
 
-from django.db import connection
-from django.db import ProgrammingError
-
-from core.models import User
-from individual.models import IndividualDataSource
-from social_protection.models import BenefitPlan
-from social_protection.services import BeneficiaryImportService
-from social_protection.utils import load_dataframe
-from workflow.exceptions import PythonWorkflowHandlerException
-
+from social_protection.workflows.utils import DataUploadWorkflow
 logger = logging.getLogger(__name__)
 
 
-def validate_dataframe_headers(df, schema):
-    """
-    Validates if DataFrame headers:
-    1. Are included in the JSON schema properties.
-    2. Include 'first_name', 'last_name', and 'dob'.
-    """
-    df_headers = set(df.columns)
-    schema_properties = set(schema.get('properties', {}).keys())
-    required_headers = {'first_name', 'last_name', 'dob', 'id'}
-
-    errors = []
-    if not (df_headers-required_headers).issubset(schema_properties):
-        invalid_headers = df_headers - schema_properties - required_headers
-        errors.append(
-            F"Uploaded beneficiaries contains invalid columns: {invalid_headers}"
-        )
-
-    for field in required_headers:
-        if field not in df_headers:
-            errors.append(
-                F"Uploaded beneficiaries missing essential header: {field}"
-            )
-
-    if errors:
-        raise PythonWorkflowHandlerException("\n".join(errors))
-
-
 def process_import_beneficiaries_workflow(user_uuid, benefit_plan_uuid, upload_uuid):
-    # Call the records validation service directly with the provided arguments
-    user = User.objects.get(id=user_uuid)
-    import_service = BeneficiaryImportService(user)
-    benefit_plan = BenefitPlan.objects.filter(uuid=benefit_plan_uuid, is_deleted=False).first()
-    schema = benefit_plan.beneficiary_data_schema
-    df = load_dataframe(IndividualDataSource.objects.filter(upload_id=upload_uuid))
-
-    # Valid headers are necessary conditions, breaking whole update. If file is invalid then
-    # upload is aborted because no record can be uploaded.
-    validate_dataframe_headers(df, schema)
-
-    validation_response = import_service.validate_import_beneficiaries(
-        upload_id=upload_uuid,
-        individual_sources=IndividualDataSource.objects.filter(upload_id=upload_uuid),
-        benefit_plan=benefit_plan
-    )
-
-    try:
-        if validation_response['summary_invalid_items']:
-            # If some records were not validated, call the task creation service
-            import_service.create_task_with_importing_valid_items(upload_uuid, benefit_plan)
-        else:
-            # All records are fine, execute SQL logic
-            execute_sql_logic(upload_uuid, user_uuid, benefit_plan_uuid)
-    except ProgrammingError as e:
-        # The exception on procedure execution is handled by the procedure itself.
-        logger.log(logging.WARNING, F'Error during beneficiary upload workflow, details:\n{str(e)}')
-        return
-    except Exception as e:
-        raise PythonWorkflowHandlerException(str(e))
+    # Call the records' validation service directly with the provided arguments
+    service = DataUploadWorkflow(benefit_plan_uuid, upload_uuid, user_uuid)
+    service.validate_dataframe_headers()
+    service.execute(upload_sql)
 
 
-def execute_sql_logic(upload_uuid, user_uuid, benefit_plan_uuid):
-    with connection.cursor() as cursor:
-        current_upload_id = upload_uuid
-        userUUID = user_uuid
-        benefitPlan = benefit_plan_uuid
-        # The SQL logic here needs to be carefully translated or executed directly
-        # The provided SQL is complex and may require breaking down into multiple steps or ORM operations
-        cursor.execute("""
+upload_sql = """
 DO $$
  DECLARE
             current_upload_id UUID := %s::UUID;
@@ -176,5 +106,4 @@ DO $$
         END;
     END IF;
 END $$;
-        """, [current_upload_id, userUUID, benefitPlan])
-        # Process the cursor results or handle exceptions
+        """

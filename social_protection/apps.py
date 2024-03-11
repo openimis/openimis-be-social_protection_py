@@ -22,12 +22,20 @@ DEFAULT_CONFIG = {
     "gql_check_group_beneficiary_crud": True,
     "unique_class_validation": "DeduplicationValidationStrategy",
     "validation_calculation_uuid": "4362f958-5894-435b-9bda-df6cadf88352",
+    "enable_maker_checker_for_beneficiary_upload": True,
+    "enable_maker_checker_for_beneficiary_update": True,
     "validation_import_valid_items": "validation.import_valid_items",
+    "validation_import_valid_items": "validation.import_valid_items",
+    "validation_upload_valid_items": "validation.upload_valid_items",
     "validation_download_invalid_items": "validation.download_invalid_items",
-    "validation_import_valid_items_workflow": "beneficiary-import-valid-items",
+
+    "validation_import_valid_items_workflow": "beneficiary-import-valid-items.beneficiary-import-valid-items",
+    "validation_upload_valid_items_workflow": "beneficiary-upload-valid-items.beneficiary-upload-valid-items",
+
     "enable_maker_checker_logic_enrollment": False,
 
-    "enable_python_workflows": False
+
+    "enable_python_workflows": True
 }
 
 
@@ -54,8 +62,13 @@ class SocialProtectionConfig(AppConfig):
     unique_class_validation = None
     validation_calculation_uuid = None
     validation_import_valid_items = None
+    validation_upload_valid_items = None
     validation_download_invalid_items = None
     validation_import_valid_items_workflow = None
+    validation_upload_valid_items_workflow = None
+
+    enable_maker_checker_for_beneficiary_upload = None
+    enable_maker_checker_for_beneficiary_update = None
 
     enable_python_workflows = None
     enable_maker_checker_logic_enrollment = None
@@ -69,7 +82,10 @@ class SocialProtectionConfig(AppConfig):
 
     def _set_up_workflows(self):
         from workflow.systems.python import PythonWorkflowAdaptor
-        from social_protection.workflows import process_import_beneficiaries_workflow
+        from social_protection.workflows import process_import_beneficiaries_workflow, \
+            process_update_beneficiaries_workflow, \
+            process_import_valid_beneficiaries_workflow, \
+            process_update_valid_beneficiaries_workflow
 
         if self.enable_python_workflows:
             PythonWorkflowAdaptor.register_workflow(
@@ -77,11 +93,41 @@ class SocialProtectionConfig(AppConfig):
                 'socialProtection',
                 process_import_beneficiaries_workflow
             )
+            PythonWorkflowAdaptor.register_workflow(
+                'Python Beneficiaries Update',
+                'socialProtection',
+                process_update_beneficiaries_workflow
+            )
+            PythonWorkflowAdaptor.register_workflow(
+                'Python Beneficiaries Valid Upload',
+                'socialProtection',
+                process_import_valid_beneficiaries_workflow
+            )
+            PythonWorkflowAdaptor.register_workflow(
+                'Python Beneficiaries Valid Update',
+                'socialProtection',
+                process_update_valid_beneficiaries_workflow
+            )
 
         # Replace default setup for invalid workflow to be python one
-        if self.enable_python_workflows is True and \
-                self.validation_import_valid_items_workflow == DEFAULT_CONFIG['validation_import_valid_items_workflow']:
-            self.validation_import_valid_items_workflow = 'Python Beneficiaries Upload'
+        if SocialProtectionConfig.enable_python_workflows is True:
+
+            # Resolve Maker-Checker Workflows Overwrite
+            if self.validation_import_valid_items_workflow == DEFAULT_CONFIG['validation_import_valid_items_workflow']:
+                SocialProtectionConfig.validation_import_valid_items_workflow \
+                    = 'socialProtection.Python Beneficiaries Valid Upload'
+
+            if self.validation_upload_valid_items_workflow == DEFAULT_CONFIG['validation_upload_valid_items_workflow']:
+                SocialProtectionConfig.validation_upload_valid_items_workflow \
+                    = 'socialProtection.Python Beneficiaries Valid Update'
+
+            # # Create Maker-Checker Logic tasks
+            # if self.validation_import_valid_items == DEFAULT_CONFIG['validation_import_valid_items']:
+            #     SocialProtectionConfig.validation_import_valid_items \
+            #         = 'socialProtection.Python Beneficiaries Valid Upload'
+            # if self.validation_upload_valid_items == DEFAULT_CONFIG['validation_upload_valid_items']:
+            #     SocialProtectionConfig.validation_upload_valid_items \
+            #         = 'socialProtection.Python Beneficiaries Valid Update'
 
     @classmethod
     def __load_config(cls, cfg):
