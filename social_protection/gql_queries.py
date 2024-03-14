@@ -132,3 +132,39 @@ class BenefitPlanSchemaFieldsGQLType(ObjectType):
             for field in schema  # Iterate over fields in the schema
         )
         return field_list
+
+
+class BenefitPlanHistoryGQLType(DjangoObjectType, JsonExtMixin):
+    uuid = graphene.String(source='uuid')
+    has_payment_plans = graphene.Boolean()
+
+    def resolve_user_updated(self, info):
+        return self.user_updated
+
+    class Meta:
+        model = BenefitPlan.history.model
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "code": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "name": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
+            "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
+            "max_beneficiaries": ["exact", "lt", "lte", "gt", "gte"],
+            "institution": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+
+            "date_created": ["exact", "lt", "lte", "gt", "gte"],
+            "date_updated": ["exact", "lt", "lte", "gt", "gte"],
+            "is_deleted": ["exact"],
+            "version": ["exact"],
+            "description": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+        }
+        connection_class = ExtendedConnection
+
+    def resolve_beneficiary_data_schema(self, info):
+        if _have_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms):
+            return self.beneficiary_data_schema
+        return None
+
+    def resolve_has_payment_plans(self, info):
+        return PaymentPlan.objects.filter(benefit_plan_id=self.id).exists()
