@@ -1,15 +1,21 @@
 import logging
 
+from core.models import User
 from social_protection.workflows.utils import DataUpdateWorkflow
+from social_protection.services import BeneficiaryImportService
+from social_protection.models import BenefitPlan
 
 logger = logging.getLogger(__name__)
 
 
 def process_update_beneficiaries_workflow(user_uuid, benefit_plan_uuid, upload_uuid):
     # Call the records validation service directly with the provided arguments
+    user = User.objects.get(id=user_uuid)
     service = DataUpdateWorkflow(benefit_plan_uuid, upload_uuid, user_uuid)
     service.validate_dataframe_headers(True)
     service.execute(update_sql)
+    benefit_plan = BenefitPlan.objects.get(id=benefit_plan_uuid)
+    BeneficiaryImportService(user).synchronize_data_for_reporting(upload_uuid, benefit_plan)
 
 
 update_sql = """

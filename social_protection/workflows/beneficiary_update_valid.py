@@ -1,20 +1,23 @@
 import logging
 
-# from social_protection.workflows.utils import validate_dataframe_headers, load_df, \
-#     create_task_or_execute_sql
+from core.models import User
 from social_protection.workflows.utils import SqlProcedurePythonWorkflow
+from social_protection.services import BeneficiaryImportService
+from social_protection.models import BenefitPlan
 
 logger = logging.getLogger(__name__)
 
 
 def process_update_valid_beneficiaries_workflow(user_uuid, benefit_plan_uuid, upload_uuid, accepted=None):
+    user = User.objects.get(id=user_uuid)
     service = SqlProcedurePythonWorkflow(benefit_plan_uuid, upload_uuid, user_uuid, accepted)
     service.validate_dataframe_headers(True)
     if isinstance(accepted, list):
         service.execute(upload_sql_partial, [upload_uuid, user_uuid, benefit_plan_uuid, accepted])
     else:
         service.execute(upload_sql, [upload_uuid, user_uuid, benefit_plan_uuid])
-
+    benefit_plan = BenefitPlan.objects.get(id=benefit_plan_uuid)
+    BeneficiaryImportService(user).synchronize_data_for_reporting(upload_uuid, benefit_plan)
 
 
 upload_sql = """     

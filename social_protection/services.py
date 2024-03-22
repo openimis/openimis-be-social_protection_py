@@ -331,11 +331,14 @@ class BeneficiaryImportService:
         individual_data_source.save(username=self.user.username)
 
     def _synchronize_individual(self, upload_id):
-        synch_status = {'report_synch': 'true'}
         individuals_to_update = Individual.objects.filter(
             individualdatasource__upload=upload_id
         )
         for individual in individuals_to_update:
+            synch_status = {
+                'report_synch': 'true',
+                'version': individual.version + 1,
+            }
             if individual.json_ext:
                 individual.json_ext.update(synch_status)
             else:
@@ -343,7 +346,6 @@ class BeneficiaryImportService:
             individual.save(username=self.user.username)
 
     def _synchronize_beneficiary(self, benefit_plan, upload_id):
-        synch_status = {'report_synch': 'true'}
         unique_uuids = list((
             Beneficiary.objects
                 .filter(benefit_plan=benefit_plan, individual__individualdatasource__upload_id=upload_id)
@@ -354,6 +356,10 @@ class BeneficiaryImportService:
             id__in=unique_uuids
         )
         for beneficiary in beneficiaries:
+            synch_status = {
+                'report_synch': 'true',
+                'version': beneficiary.version + 1,
+            }
             if beneficiary.json_ext:
                 beneficiary.json_ext.update(synch_status)
             else:
