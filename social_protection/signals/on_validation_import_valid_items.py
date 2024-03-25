@@ -1,9 +1,10 @@
 import logging
+from django.core.exceptions import ValidationError
 from typing import List
 
 from core.models import User
-from individual.models import IndividualDataSourceUpload, IndividualDataSource
-from social_protection.models import BenefitPlanDataUploadRecords, BenefitPlan
+from individual.models import IndividualDataSourceUpload, IndividualDataSource, Individual
+from social_protection.models import Beneficiary, BenefitPlanDataUploadRecords, BenefitPlan
 from tasks_management.models import Task
 from workflow.services import WorkflowService
 
@@ -80,6 +81,24 @@ def on_task_complete_action(business_event, **kwargs):
             workflow = SocialProtectionConfig.validation_import_valid_items_workflow
         elif business_event == SocialProtectionConfig.validation_upload_valid_items:
             workflow = SocialProtectionConfig.validation_upload_valid_items_workflow
+        elif business_event == SocialProtectionConfig.validation_enrollment:
+            individuals_to_enroll = Individual.objects.filter(
+                individualdatasource__upload_id=data['task']['json_ext']['data_upload_id']
+            )
+            user = User.objects.get(id=data['user']['id'])
+            for individual in individuals_to_enroll:
+                # Create a new Beneficiary instance
+                beneficiary = Beneficiary(
+                    individual=individual,
+                    benefit_plan_id=data['task']['json_ext']['benefit_plan_id'],
+                    status=data['task']['json_ext']['beneficiary_status'],
+                    json_ext=individual.json_ext
+                )
+                try:
+                    beneficiary.save(username=user.username)
+                except ValidationError as e:
+                    logger.error(f"Validation error occurred: {e}")
+            return
         else:
             raise ValueError(f"Business event {business_event} doesn't have assigned workflow.")
         ItemsUploadTaskCompletionEvent(
@@ -103,6 +122,7 @@ def on_task_complete_import_validated(**kwargs):
     from social_protection.apps import SocialProtectionConfig
     on_task_complete_action(SocialProtectionConfig.validation_import_valid_items, **kwargs)
     on_task_complete_action(SocialProtectionConfig.validation_upload_valid_items, **kwargs)
+    on_task_complete_action(SocialProtectionConfig.validation_enrollment, **kwargs)
 
 
 def _delete_rejected(uuids_list):

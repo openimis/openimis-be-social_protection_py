@@ -29,3 +29,17 @@ def fetch_summary_of_valid_items(upload_id):
         Q(upload_id=upload_id) &
         Q(validations__validation_errors=[])
     ).values_list('uuid', flat=True))
+
+
+def calculate_percentage_of_invalid_items(upload_id):
+    number_of_valid_items = len(fetch_summary_of_valid_items(upload_id))
+    number_of_invalid_items = len(fetch_summary_of_broken_items(upload_id))
+    total_items = number_of_invalid_items + number_of_valid_items
+
+    if total_items == 0:
+        percentage_of_invalid_items = 0
+    else:
+        percentage_of_invalid_items = (number_of_invalid_items / total_items) * 100
+
+    percentage_of_invalid_items = round(percentage_of_invalid_items, 2)
+    return percentage_of_invalid_items
