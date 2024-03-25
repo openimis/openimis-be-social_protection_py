@@ -98,6 +98,7 @@ def on_task_complete_action(business_event, **kwargs):
                     beneficiary.save(username=user.username)
                 except ValidationError as e:
                     logger.error(f"Validation error occurred: {e}")
+            return
         else:
             raise ValueError(f"Business event {business_event} doesn't have assigned workflow.")
         ItemsUploadTaskCompletionEvent(
