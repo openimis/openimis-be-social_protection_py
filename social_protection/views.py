@@ -3,12 +3,15 @@ import pandas as pd
 
 from django.db.models import Q
 from django.http import HttpResponse, StreamingHttpResponse
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from core.utils import DefaultStorageFileHandler
 from im_export.views import check_user_rights
 from individual.apps import IndividualConfig
 from individual.models import IndividualDataSource
+from social_protection.apps import SocialProtectionConfig
 from social_protection.models import BenefitPlan
 from social_protection.services import BeneficiaryImportService
 from workflow.services import WorkflowService
@@ -19,21 +22,28 @@ logger = logging.getLogger(__name__)
 @api_view(["POST"])
 @permission_classes([check_user_rights(IndividualConfig.gql_individual_create_perms, )])
 def import_beneficiaries(request):
+    import_file = None
+    benefit_plan = None
     try:
         user = request.user
         import_file, workflow, benefit_plan = _resolve_import_beneficiaries_args(request)
-
+        _handle_file_upload(import_file, benefit_plan)
         result = BeneficiaryImportService(user).import_beneficiaries(import_file, benefit_plan, workflow)
         if not result.get('success'):
             raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
 
         return Response(result)
     except ValueError as e:
+        if import_file and benefit_plan:
+            _remove_file(benefit_plan, import_file)
         logger.error("Error while uploading individuals", exc_info=e)
-        return Response({'success': False, 'error': str(e)}, status=400)
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except FileExistsError as e:
+        logger.error("Error while saving file", exc_info=e)
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_409_CONFLICT)
     except Exception as e:
         logger.error("Unexpected error while uploading individuals", exc_info=e)
-        return Response({'success': False, 'error': str(e)}, status=500)
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
@@ -81,6 +91,7 @@ def create_task_with_importing_valid_items(request):
 
 
 @api_view(["GET"])
+@permission_classes([check_user_rights(IndividualConfig.gql_individual_search_perms, )])
 def download_invalid_items(request):
     try:
         upload_id = request.query_params.get('upload_id')
@@ -119,6 +130,27 @@ def download_invalid_items(request):
     except Exception as exc:
         logger.error("Unexpected error", exc_info=exc)
         return Response({'success': False, 'error': str(exc)}, status=500)
+
+
+@api_view(["GET"])
+@permission_classes([check_user_rights(IndividualConfig.gql_individual_search_perms, )])
+def download_beneficiary_upload(request):
+    try:
+        benefit_plan_id = request.query_params.get('benefit_plan_id')
+        filename = request.query_params.get('filename')
+        target_file_path = SocialProtectionConfig.get_beneficiary_upload_file_path(benefit_plan_id, filename)
+        file_handler = DefaultStorageFileHandler(target_file_path)
+        return file_handler.get_file_response_csv(filename)
+
+    except ValueError as exc:
+        logger.error("Error while fetching data", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except FileNotFoundError as exc:
+        logger.error("Error while getting file", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as exc:
+        logger.error("Unexpected error", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
@@ -210,3 +242,18 @@ def _resolve_synchronize_data_for_reporting(request):
         raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
 
     return upload_id, benefit_plan
+
+
+def _handle_file_upload(file, benefit_plan):
+    try:
+        target_file_path = SocialProtectionConfig.get_beneficiary_upload_file_path(benefit_plan.id, file.name)
+        file_handler = DefaultStorageFileHandler(target_file_path)
+        file_handler.save_file(file)
+    except FileExistsError as exc:
+        raise exc
+
+
+def _remove_file(benefit_plan, file):
+    target_file_path = SocialProtectionConfig.get_beneficiary_upload_file_path(benefit_plan.id, file.name)
+    file_handler = DefaultStorageFileHandler(target_file_path)
+    file_handler.remove_file()

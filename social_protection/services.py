@@ -22,7 +22,8 @@ from social_protection.models import (
     BenefitPlanDataUploadRecords,
     GroupBeneficiary
 )
-from social_protection.utils import load_dataframe
+
+from social_protection.utils import load_dataframe, fetch_summary_of_valid_items, fetch_summary_of_broken_items
 from social_protection.validation import (
     BeneficiaryValidation,
     BenefitPlanValidation, GroupBeneficiaryValidation
@@ -32,6 +33,8 @@ from tasks_management.services import UpdateCheckerLogicServiceMixin, CheckerLog
 from workflow.systems.base import WorkflowHandler
 from workflow.util import result as WorkflowExecutionResult
 from core.models import User
+
+from social_protection.apps import SocialProtectionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +136,7 @@ class BeneficiaryImportService:
                              benefit_plan: BenefitPlan,
                              workflow: WorkflowHandler):
         upload = self._save_sources(import_file)
+        self._create_benefit_plan_data_upload_records(benefit_plan, workflow, upload)
         self._trigger_workflow(workflow, upload, benefit_plan)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
@@ -145,6 +149,15 @@ class BeneficiaryImportService:
         self._save_data_source(dataframe, upload)
         return upload
 
+    @transaction.atomic
+    def _create_benefit_plan_data_upload_records(self, benefit_plan, workflow, upload):
+        record = BenefitPlanDataUploadRecords(
+            data_upload=upload,
+            benefit_plan=benefit_plan,
+            workflow=workflow.name
+        )
+        record.save(username=self.user.username)
+
     def validate_import_beneficiaries(self, upload_id: uuid, individual_sources, benefit_plan: BenefitPlan):
         dataframe = self._load_dataframe(individual_sources)
         validated_dataframe, invalid_items = self._validate_possible_beneficiaries(
@@ -154,9 +167,44 @@ class BeneficiaryImportService:
         )
         return {'success': True, 'data': validated_dataframe, 'summary_invalid_items': invalid_items}
 
-
     def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
-        self._create_import_valid_items_task(benefit_plan, upload_id, self.user)
+        BeneficiaryTaskCreatorService(self.user)\
+            .create_task_with_importing_valid_items(upload_id, benefit_plan)
+
+        record = BenefitPlanDataUploadRecords.objects.get(
+            data_upload_id=upload_id,
+            benefit_plan=benefit_plan,
+            is_deleted=False
+        )
+        if not SocialProtectionConfig.enable_maker_checker_for_beneficiary_upload:
+            from social_protection.signals.on_validation_import_valid_items import ItemsUploadTaskCompletionEvent
+            ItemsUploadTaskCompletionEvent(
+                SocialProtectionConfig.validation_import_valid_items_workflow,
+                record,
+                record.data_upload.id,
+                record.benefit_plan,
+                self.user
+            ).run_workflow()
+
+    def create_task_with_update_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
+        BeneficiaryTaskCreatorService(self.user)\
+            .create_task_with_update_valid_items(upload_id, benefit_plan)
+
+        record = BenefitPlanDataUploadRecords.objects.get(
+            data_upload_id=upload_id,
+            benefit_plan=benefit_plan,
+            is_deleted=False
+        )
+        # Resolve automatically if maker-checker not enabled
+        if not SocialProtectionConfig.enable_maker_checker_for_beneficiary_update:
+            from social_protection.signals.on_validation_import_valid_items import ItemsUploadTaskCompletionEvent
+            ItemsUploadTaskCompletionEvent(
+                SocialProtectionConfig.validation_upload_valid_items_workflow,
+                record,
+                record.data_upload.id,
+                record.benefit_plan,
+                self.user
+            ).run_workflow()
 
     def synchronize_data_for_reporting(self, upload_id: uuid, benefit_plan: BenefitPlan):
         self._synchronize_individual(upload_id)
@@ -171,19 +219,21 @@ class BeneficiaryImportService:
             field_validation = {'row': row.to_dict(), 'validations': {}}
             for field, field_properties in properties.items():
                 if "validationCalculation" in field_properties:
-                    field_validation['validations'][f'{field}'] = self._handle_validation_calculation(
-                        row, field, field_properties
-                    )
+                    if field in row:
+                        field_validation['validations'][f'{field}'] = self._handle_validation_calculation(
+                            row, field, field_properties
+                        )
                 if "uniqueness" in field_properties:
-                    field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
-                        row, field, field_properties, benefit_plan, dataframe
-                    )
+                    if field in row:
+                        field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
+                            row, field, field_properties, benefit_plan, dataframe
+                        )
             validated_dataframe.append(field_validation)
             self.__save_validation_error_in_data_source(row, field_validation)
             return row
 
         dataframe.apply(validate_row, axis='columns')
-        invalid_items = self.__fetch_summary_of_broken_items(upload_id)
+        invalid_items = fetch_summary_of_broken_items(upload_id)
         return validated_dataframe, invalid_items
 
     def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
@@ -280,8 +330,57 @@ class BeneficiaryImportService:
         individual_data_source.validations = validation_column
         individual_data_source.save(username=self.user.username)
 
-    @register_service_signal('validation.create_task')
-    def _create_import_valid_items_task(self, benefit_plan, upload_id, user):
+    def _synchronize_individual(self, upload_id):
+        individuals_to_update = Individual.objects.filter(
+            individualdatasource__upload=upload_id
+        )
+        for individual in individuals_to_update:
+            synch_status = {
+                'report_synch': 'true',
+                'version': individual.version + 1,
+            }
+            if individual.json_ext:
+                individual.json_ext.update(synch_status)
+            else:
+                individual.json_ext = synch_status
+            individual.save(username=self.user.username)
+
+    def _synchronize_beneficiary(self, benefit_plan, upload_id):
+        unique_uuids = list((
+            Beneficiary.objects
+                .filter(benefit_plan=benefit_plan, individual__individualdatasource__upload_id=upload_id)
+                .values_list('id', flat=True)
+                .distinct()
+        ))
+        beneficiaries = Beneficiary.objects.filter(
+            id__in=unique_uuids
+        )
+        for beneficiary in beneficiaries:
+            synch_status = {
+                'report_synch': 'true',
+                'version': beneficiary.version + 1,
+            }
+            if beneficiary.json_ext:
+                beneficiary.json_ext.update(synch_status)
+            else:
+                beneficiary.json_ext = synch_status
+            beneficiary.save(username=self.user.username)
+
+
+class BeneficiaryTaskCreatorService:
+
+    def __init__(self, user):
+        self.user = user
+
+    def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
+        self._create_task(benefit_plan, upload_id, SocialProtectionConfig.validation_import_valid_items)
+
+    def create_task_with_update_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
+        self._create_task(benefit_plan, upload_id, SocialProtectionConfig.validation_upload_valid_items)
+
+    @register_service_signal('socialProtection.update_task')
+    @transaction.atomic()
+    def _create_task(self, benefit_plan, upload_id, business_event):
         from social_protection.apps import SocialProtectionConfig
         from tasks_management.services import TaskService
         from tasks_management.apps import TasksManagementConfig
@@ -296,63 +395,24 @@ class BeneficiaryImportService:
             'source_name': upload_record.data_upload.source_name,
             'workflow': upload_record.workflow,
             'percentage_of_invalid_items': self.__calculate_percentage_of_invalid_items(upload_id),
+            'data_upload_id': upload_id
         }
-        TaskService(user).create({
+        TaskService(self.user).create({
             'source': 'import_valid_items',
             'entity': upload_record,
             'status': Task.Status.RECEIVED,
             'executor_action_event': TasksManagementConfig.default_executor_event,
-            'business_event': SocialProtectionConfig.validation_import_valid_items,
+            'business_event': business_event,
             'json_ext': json_ext
         })
 
-    def _synchronize_individual(self, upload_id):
-        synch_status = {'report_synch': 'true'}
-        individuals_to_update = Individual.objects.filter(
-            individualdatasource__upload=upload_id
-        )
-        for individual in individuals_to_update:
-            if individual.json_ext:
-                individual.json_ext.update(synch_status)
-            else:
-                individual.json_ext = synch_status
-            individual.save(username=self.user.username)
-
-    def _synchronize_beneficiary(self, benefit_plan, upload_id):
-        synch_status = {'report_synch': 'true'}
-        unique_uuids = list((
-            Beneficiary.objects
-                .filter(benefit_plan=benefit_plan, individual__individualdatasource__upload_id=upload_id)
-                .values_list('id', flat=True)
-                .distinct()
-        ))
-        beneficiaries = Beneficiary.objects.filter(
-            id__in=unique_uuids
-        )
-        for beneficiary in beneficiaries:
-            if beneficiary.json_ext:
-                beneficiary.json_ext.update(synch_status)
-            else:
-                beneficiary.json_ext = synch_status
-            beneficiary.save(username=self.user.username)
-
-    def __fetch_summary_of_broken_items(self, upload_id):
-        return list(IndividualDataSource.objects.filter(
-            Q(is_deleted=False) &
-            Q(upload_id=upload_id) &
-            ~Q(validations__validation_errors=[])
-        ).values_list('uuid', flat=True))
-
-    def __fetch_summary_of_valid_items(self, upload_id):
-        return list(IndividualDataSource.objects.filter(
-            Q(is_deleted=False) &
-            Q(upload_id=upload_id) &
-            Q(validations__validation_errors=[])
-        ).values_list('uuid', flat=True))
+        data_upload = upload_record.data_upload
+        data_upload.status = IndividualDataSourceUpload.Status.WAITING_FOR_VERIFICATION
+        data_upload.save(username=self.user.username)
 
     def __calculate_percentage_of_invalid_items(self, upload_id):
-        number_of_valid_items = len(self.__fetch_summary_of_valid_items(upload_id))
-        number_of_invalid_items = len(self.__fetch_summary_of_broken_items(upload_id))
+        number_of_valid_items = len(fetch_summary_of_valid_items(upload_id))
+        number_of_invalid_items = len(fetch_summary_of_broken_items(upload_id))
         total_items = number_of_invalid_items + number_of_valid_items
 
         if total_items == 0:
