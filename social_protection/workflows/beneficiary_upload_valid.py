@@ -178,7 +178,7 @@ BEGIN
                             'failing_entries_invalid_json', failing_entries_invalid_json
                         ))
         WHERE "UUID" = current_upload_id;
-        
+
         UPDATE individual_individualdatasourceupload SET status = 'FAIL' WHERE "UUID" = current_upload_id;
     ELSE
         -- If no invalid entries, then proceed with the data manipulation, considering the accepted filter
@@ -203,17 +203,14 @@ BEGIN
           AND individual_individualdatasource."Json_ext" = ne."Json_ext"
           AND validations ->> 'validation_errors' = '[]'
           AND (accepted IS NULL OR individual_individualdatasource."UUID" = ANY(accepted));
-        
-        WITH new_entry_2 AS (
-            INSERT INTO social_protection_beneficiary(
-                "UUID", "isDeleted", "Json_ext", "DateCreated", "DateUpdated", version, "DateValidFrom", "DateValidTo", status, "benefit_plan_id", "individual_id", "UserCreatedUUID", "UserUpdatedUUID"
-            )
-            SELECT gen_random_uuid(), false, iids."Json_ext" - 'first_name' - 'last_name' - 'dob', NOW(), NOW(), 1, NOW(), NULL, 'POTENTIAL', benefitPlan, new_entry."UUID", userUUID, userUUID
-            FROM individual_individualdatasource iids
-            JOIN new_entry ON new_entry."UUID" = iids.individual_id
-            WHERE iids.upload_id = current_upload_id AND iids."isDeleted" = false AND iids."UUID" = ANY(accepted)
-            RETURNING "UUID"
-        ) select null;
+
+        INSERT INTO social_protection_beneficiary(
+        "UUID", "isDeleted", "Json_ext", "DateCreated", "DateUpdated", version, "DateValidFrom", "DateValidTo", status, "benefit_plan_id", "individual_id", "UserCreatedUUID", "UserUpdatedUUID"
+        )
+        SELECT gen_random_uuid(), false, iids."Json_ext" - 'first_name' - 'last_name' - 'dob', NOW(), NOW(), 1, NOW(), NULL, 'POTENTIAL', benefitPlan, new_entry."UUID", userUUID, userUUID
+        FROM individual_individualdatasource iids right join individual_individual new_entry on new_entry."UUID" = iids.individual_id
+        WHERE iids.upload_id=current_upload_id and iids."isDeleted"=false
+        AND (accepted IS NULL OR iids."UUID" = ANY(accepted));
     END IF;
 EXCEPTION WHEN OTHERS THEN
     UPDATE individual_individualdatasourceupload SET status = 'FAIL', error = jsonb_build_object(
