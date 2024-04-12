@@ -33,36 +33,36 @@ class GroupBeneficiaryServiceTest(TestCase):
             "benefit_plan_id": cls.benefit_plan.id,
         }
 
-    # def test_add_group_beneficiary(self):
-    #     result = self.service.create(self.payload)
-    #     self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
-    #     uuid = result.get('data', {}).get('uuid', None)
-    #     query = self.query_all.filter(uuid=uuid)
-    #     self.assertEqual(query.count(), 1)
+    def test_add_group_beneficiary(self):
+        result = self.service.create(self.payload)
+        self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
+        uuid = result.get('data', {}).get('uuid', None)
+        query = self.query_all.filter(uuid=uuid)
+        self.assertEqual(query.count(), 1)
 
-    # def test_update_group_beneficiary(self):
-    #     result = self.service.create(self.payload)
-    #     self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
-    #     uuid = result.get('data', {}).get('uuid')
-    #     update_payload = copy.deepcopy(service_beneficiary_update_payload)
-    #     update_payload['id'] = uuid
-    #     update_payload['group_id'] = self.group.id
-    #     update_payload['benefit_plan_id'] = self.benefit_plan.id
-    #     result = self.service.update(update_payload)
-    #     self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
-    #     query = self.query_all.filter(uuid=uuid)
-    #     self.assertEqual(query.count(), 1)
-    #     self.assertEqual(query.first().status, update_payload.get('status'))
+    def test_update_group_beneficiary(self):
+        result = self.service.create(self.payload)
+        self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
+        uuid = result.get('data', {}).get('uuid')
+        update_payload = copy.deepcopy(service_beneficiary_update_payload)
+        update_payload['id'] = uuid
+        update_payload['group_id'] = self.group.id
+        update_payload['benefit_plan_id'] = self.benefit_plan.id
+        result = self.service.update(update_payload)
+        self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
+        query = self.query_all.filter(uuid=uuid)
+        self.assertEqual(query.count(), 1)
+        self.assertEqual(query.first().status, update_payload.get('status'))
 
-    # def test_delete_group_beneficiary(self):
-    #     result = self.service.create(self.payload)
-    #     self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
-    #     uuid = result.get('data', {}).get('uuid')
-    #     delete_payload = {'id': uuid}
-    #     result = self.service.delete(delete_payload)
-    #     self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
-    #     query = self.query_all.filter(uuid=uuid)
-    #     self.assertEqual(query.count(), 0)
+    def test_delete_group_beneficiary(self):
+        result = self.service.create(self.payload)
+        self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
+        uuid = result.get('data', {}).get('uuid')
+        delete_payload = {'id': uuid}
+        result = self.service.delete(delete_payload)
+        self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
+        query = self.query_all.filter(uuid=uuid)
+        self.assertEqual(query.count(), 0)
 
     @classmethod
     def __create_benefit_plan(cls):
