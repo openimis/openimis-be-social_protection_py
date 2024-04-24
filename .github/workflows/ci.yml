@@ -7,7 +7,6 @@ on:
       - main
       - 'release/**'
       - develop
-      - 'feature/**'
   workflow_dispatch:
     inputs:
       comment:
@@ -17,7 +16,7 @@ on:
 jobs:
   call:
     name: Default CI Flow
-    uses: openimis/openimis-be_py/.github/workflows/ci_module.yml@develop
+    uses: openimis/openimis-be_py/.github/workflows/ci_module.yml@coreMISBranchUpdate
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -27,4 +26,4 @@ jobs:
       SONAR_PROJECT_VERSION: 1.0
       SONAR_SOURCES: social_protection
       SONAR_EXCLUSIONS: "**/migrations/**,**/static/**,**/media/**,**/tests/**"
-
+      branchName: coreMISBranchUpdate
