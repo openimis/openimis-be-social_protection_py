@@ -259,8 +259,8 @@ class BeneficiaryImportService:
         result_row = calculation.calculate_if_active_for_object(
             validation_calculation,
             calculation_uuid,
-            field,
-            row[field]
+            field_name=field,
+            field_value=row[field]
         )
         return result_row
 
