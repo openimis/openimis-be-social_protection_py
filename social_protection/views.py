@@ -26,9 +26,11 @@ def import_beneficiaries(request):
     benefit_plan = None
     try:
         user = request.user
-        import_file, workflow, benefit_plan = _resolve_import_beneficiaries_args(request)
+        import_file, workflow, benefit_plan, group_aggregation_column = _resolve_import_beneficiaries_args(request)
         _handle_file_upload(import_file, benefit_plan)
-        result = BeneficiaryImportService(user).import_beneficiaries(import_file, benefit_plan, workflow)
+        result = BeneficiaryImportService(user).import_beneficiaries(
+            import_file, benefit_plan, workflow, group_aggregation_column
+        )
         if not result.get('success'):
             raise ValueError('{}: {}'.format(result.get("message"), result.get("details")))
 
@@ -177,6 +179,7 @@ def _resolve_import_beneficiaries_args(request):
     benefit_plan_uuid = request.POST.get('benefit_plan')
     workflow_name = request.POST.get('workflow_name')
     workflow_group = request.POST.get('workflow_group')
+    group_aggregation_column = request.POST.get('group_aggregation_column')
 
     if not import_file:
         raise ValueError(f'Import file not provided')
@@ -186,6 +189,9 @@ def _resolve_import_beneficiaries_args(request):
         raise ValueError(f'Workflow name not provided')
     if not workflow_group:
         raise ValueError(f'Workflow group not provided')
+    if (group_aggregation_column and
+            BenefitPlan.objects.filter(uuid=benefit_plan_uuid).first().type != BenefitPlan.BenefitPlanType.GROUP_TYPE):
+        raise ValueError(f'Group aggregation only for group type benefit plans')
 
     result = WorkflowService.get_workflows(workflow_name, workflow_group)
     if not result.get('success'):
@@ -204,7 +210,7 @@ def _resolve_import_beneficiaries_args(request):
     if not benefit_plan:
         raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
 
-    return import_file, workflow, benefit_plan
+    return import_file, workflow, benefit_plan, group_aggregation_column
 
 
 def _resolve_validate_import_beneficiaries_args(request):

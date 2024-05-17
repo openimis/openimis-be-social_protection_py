@@ -134,9 +134,10 @@ class BeneficiaryImportService:
     def import_beneficiaries(self,
                              import_file: InMemoryUploadedFile,
                              benefit_plan: BenefitPlan,
-                             workflow: WorkflowHandler):
+                             workflow: WorkflowHandler,
+                             group_aggregation_column: str):
         upload = self._save_sources(import_file)
-        self._create_benefit_plan_data_upload_records(benefit_plan, workflow, upload)
+        self._create_benefit_plan_data_upload_records(benefit_plan, workflow, upload, group_aggregation_column)
         self._trigger_workflow(workflow, upload, benefit_plan)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
@@ -150,11 +151,12 @@ class BeneficiaryImportService:
         return upload
 
     @transaction.atomic
-    def _create_benefit_plan_data_upload_records(self, benefit_plan, workflow, upload):
+    def _create_benefit_plan_data_upload_records(self, benefit_plan, workflow, upload, group_aggregation_column):
         record = BenefitPlanDataUploadRecords(
             data_upload=upload,
             benefit_plan=benefit_plan,
-            workflow=workflow.name
+            workflow=workflow.name,
+            json_ext={"group_aggregation_column": group_aggregation_column}
         )
         record.save(username=self.user.username)
 
