@@ -1,7 +1,9 @@
 from django.apps import apps
 
+from social_protection.apps import SocialProtectionConfig
+
 # Check if the 'opensearch_reports' app is in INSTALLED_APPS
-if 'opensearch_reports' in apps.app_configs:
+if 'opensearch_reports' in apps.app_configs and SocialProtectionConfig.opensearch_synch:
     from django_opensearch_dsl import Document, fields as opensearch_fields
     from django_opensearch_dsl.registries import registry
     from social_protection.models import Beneficiary, BenefitPlan
