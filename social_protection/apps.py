@@ -36,7 +36,8 @@ DEFAULT_CONFIG = {
     "enable_maker_checker_logic_enrollment": True,
 
 
-    "enable_python_workflows": True
+    "enable_python_workflows": True,
+    "opensearch_synch": False,
 }
 
 
@@ -74,6 +75,7 @@ class SocialProtectionConfig(AppConfig):
 
     enable_python_workflows = None
     enable_maker_checker_logic_enrollment = None
+    opensearch_synch = None
 
     def ready(self):
         from core.models import ModuleConfiguration
