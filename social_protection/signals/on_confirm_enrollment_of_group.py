@@ -34,6 +34,7 @@ def on_confirm_enrollment_of_group(**kwargs):
     user = result['user']
     groups_to_upload = result['groups_not_assigned_to_selected_programme']
     group_ids = groups_to_upload.values_list('id', flat=True)
+    print(group_ids)
     if SocialProtectionConfig.enable_maker_checker_logic_enrollment:
         benefit_plan = BenefitPlan.objects.get(id=benefit_plan_id)
         upload = IndividualDataSourceUpload(
@@ -52,7 +53,7 @@ def on_confirm_enrollment_of_group(**kwargs):
             is_deleted=False,
             group_id__in=group_ids,
             role=GroupIndividual.Role.HEAD
-        )
+        ).distinct()
         for group_individual in group_individuals:
             source = IndividualDataSource(
                 upload=upload,
