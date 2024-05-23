@@ -32,8 +32,9 @@ DEFAULT_CONFIG = {
     "validation_import_valid_items_workflow": "beneficiary-import-valid-items.beneficiary-import-valid-items",
     "validation_upload_valid_items_workflow": "beneficiary-upload-valid-items.beneficiary-upload-valid-items",
     "validation_enrollment": "validation-enrollment",
+    "validation_group_enrollment": "validation-group-enrollment",
 
-    "enable_maker_checker_logic_enrollment": True,
+    "enable_maker_checker_logic_enrollment": False,
 
 
     "enable_python_workflows": True,
@@ -69,6 +70,7 @@ class SocialProtectionConfig(AppConfig):
     validation_import_valid_items_workflow = None
     validation_upload_valid_items_workflow = None
     validation_enrollment = None
+    validation_group_enrollment = None
 
     enable_maker_checker_for_beneficiary_upload = None
     enable_maker_checker_for_beneficiary_update = None

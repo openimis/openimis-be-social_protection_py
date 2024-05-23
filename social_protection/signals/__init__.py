@@ -8,6 +8,7 @@ from social_protection.signals.on_validation_import_valid_items import on_task_c
     on_task_resolve
 
 from social_protection.signals.on_confirm_enrollment_of_individual import on_confirm_enrollment_of_individual
+from social_protection.signals.on_confirm_enrollment_of_group import on_confirm_enrollment_of_group
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_import_validated, \
     on_task_resolve
 
@@ -45,5 +46,10 @@ def bind_service_signals():
     bind_service_signal(
         'individual_service.select_individuals_to_benefit_plan',
         on_confirm_enrollment_of_individual,
+        bind_type=ServiceSignalBindType.AFTER
+    )
+    bind_service_signal(
+        'group_service.select_groups_to_benefit_plan',
+        on_confirm_enrollment_of_group,
         bind_type=ServiceSignalBindType.AFTER
     )

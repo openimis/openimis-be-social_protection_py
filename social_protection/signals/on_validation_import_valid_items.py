@@ -3,8 +3,18 @@ from django.core.exceptions import ValidationError
 from typing import List
 
 from core.models import User
-from individual.models import IndividualDataSourceUpload, IndividualDataSource, Individual
-from social_protection.models import Beneficiary, BenefitPlanDataUploadRecords, BenefitPlan
+from individual.models import (
+    IndividualDataSourceUpload,
+    IndividualDataSource,
+    Individual,
+    GroupIndividual
+)
+from social_protection.models import (
+    Beneficiary,
+    BenefitPlanDataUploadRecords,
+    BenefitPlan,
+    GroupBeneficiary
+)
 from tasks_management.models import Task
 from workflow.services import WorkflowService
 
@@ -99,6 +109,25 @@ def on_task_complete_action(business_event, **kwargs):
                 except ValidationError as e:
                     logger.error(f"Validation error occurred: {e}")
             return
+        elif business_event == SocialProtectionConfig.validation_group_enrollment:
+            head_groups_to_enroll = Individual.objects.filter(
+                individualdatasource__upload_id=data['task']['json_ext']['data_upload_id']
+            )
+            user = User.objects.get(id=data['user']['id'])
+            for head_individual in head_groups_to_enroll:
+                # Create a new Beneficiary instance
+                group_individual_head = GroupIndividual.objects.filter(individual=head_individual).first()
+                group_beneficiary = GroupBeneficiary(
+                    group=group_individual_head.group,
+                    benefit_plan_id=data['task']['json_ext']['benefit_plan_id'],
+                    status=data['task']['json_ext']['beneficiary_status'],
+                    json_ext=head_individual.json_ext
+                )
+                try:
+                    group_beneficiary.save(username=user.username)
+                except ValidationError as e:
+                    logger.error(f"Validation error occurred: {e}")
+            return
         else:
             raise ValueError(f"Business event {business_event} doesn't have assigned workflow.")
         ItemsUploadTaskCompletionEvent(
@@ -123,6 +152,7 @@ def on_task_complete_import_validated(**kwargs):
     on_task_complete_action(SocialProtectionConfig.validation_import_valid_items, **kwargs)
     on_task_complete_action(SocialProtectionConfig.validation_upload_valid_items, **kwargs)
     on_task_complete_action(SocialProtectionConfig.validation_enrollment, **kwargs)
+    on_task_complete_action(SocialProtectionConfig.validation_group_enrollment, **kwargs)
 
 
 def _delete_rejected(uuids_list):
