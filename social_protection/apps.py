@@ -34,7 +34,7 @@ DEFAULT_CONFIG = {
     "validation_enrollment": "validation-enrollment",
     "validation_group_enrollment": "validation-group-enrollment",
 
-    "enable_maker_checker_logic_enrollment": False,
+    "enable_maker_checker_logic_enrollment": True,
 
 
     "enable_python_workflows": True,
