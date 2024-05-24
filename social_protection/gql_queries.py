@@ -41,6 +41,7 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
             "max_beneficiaries": ["exact", "lt", "lte", "gt", "gte"],
             "institution": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "type": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
 
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],

@@ -5,8 +5,6 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.core.exceptions import PermissionDenied
 
-from core.gql.export_mixin import ExportableQueryMixin
-
 from django.utils.translation import gettext as _
 from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import ValidationMessageGQLType
@@ -28,6 +26,7 @@ from social_protection.gql_queries import (
     BenefitPlanDataUploadQGLType, BenefitPlanSchemaFieldsGQLType,
     BenefitPlanHistoryGQLType
 )
+from social_protection.export_mixin import ExportableSocialProtectionQueryMixin
 from social_protection.models import (
     BenefitPlan,
     Beneficiary, GroupBeneficiary, BenefitPlanDataUploadRecords
@@ -50,7 +49,7 @@ class BfTypeEnum(graphene.Enum):
     GROUP = BenefitPlan.BenefitPlanType.GROUP_TYPE
 
 
-class Query(ExportableQueryMixin, graphene.ObjectType):
+class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
     export_patches = {
         'beneficiary': [
             patch_details
@@ -91,7 +90,8 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         dateValidFrom__Gte=graphene.DateTime(),
         dateValidTo__Lte=graphene.DateTime(),
         applyDefaultValidityFilter=graphene.Boolean(),
-        client_mutation_id=graphene.String()
+        client_mutation_id=graphene.String(),
+        customFilters=graphene.List(of_type=graphene.String),
     )
 
     beneficiary_data_upload_history = OrderedDjangoFilterConnectionField(
@@ -238,6 +238,16 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
             SocialProtectionConfig.gql_beneficiary_search_perms
         )
         query = GroupBeneficiary.objects.filter(*filters)
+
+        custom_filters = kwargs.get("customFilters", None)
+        if custom_filters:
+            query = CustomFilterWizardStorage.build_custom_filters_queryset(
+                "individual",
+                "GroupIndividual",
+                custom_filters,
+                query,
+                "group",
+            )
         return gql_optimizer.query(query, info)
 
     def resolve_awaiting_beneficiary(self, info, **kwargs):
