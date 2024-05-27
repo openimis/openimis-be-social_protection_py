@@ -181,7 +181,10 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
 
         individual_id = kwargs.get("individual_id", None)
         if individual_id:
-            filters.append(Q(beneficiary__individual__id=individual_id))
+            filters.append(Q(
+                Q(beneficiary__individual__id=individual_id) |
+                Q(groupbeneficiary__group__groupindividual__individual__id=individual_id)
+            ))
 
         group_id = kwargs.get("group_id", None)
         if group_id:
