@@ -2,8 +2,10 @@ import logging
 
 from core.service_signals import ServiceSignalBindType
 from core.signals import bind_service_signal
+from core.models import User
+from social_protection.apps import SocialProtectionConfig
 from social_protection.services import BenefitPlanService, BeneficiaryService, GroupBeneficiaryService
-
+from social_protection.models import BenefitPlan, Beneficiary, BeneficiaryStatus
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_import_validated, \
     on_task_resolve
 
@@ -12,12 +14,35 @@ from social_protection.signals.on_confirm_enrollment_of_group import on_confirm_
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_import_validated, \
     on_task_resolve
 
+from tasks_management.models import Task
 from tasks_management.services import on_task_complete_service_handler
 
 logger = logging.getLogger(__name__)
 
 
 def bind_service_signals():
+    def on_task_close_benefit_plan(**kwargs):
+        try:
+            result = kwargs.get('result', None)
+            task = result['data']['task']
+            user = User.objects.get(id=result['data']['user']['id'])
+            if result \
+                    and result['success'] \
+                    and task['business_event'] == SocialProtectionConfig.benefit_plan_suspend:
+                task_status = task['status']
+                if task_status == Task.Status.COMPLETED:
+                    benefit_plan = BenefitPlan.objects.get(id=task['entity_id'])
+                    from core import datetime
+                    now = datetime.datetime.now()
+                    benefit_plan.date_valid_to = now
+                    benefit_plan.save(username=user.username)
+                    beneficiaries = Beneficiary.objects.filter(benefit_plan=benefit_plan, is_deleted=False)
+                    for beneficiary in beneficiaries:
+                        beneficiary.status = BeneficiaryStatus.GRADUATED
+                        beneficiary.save(username=user.username)
+        except Exception as exc:
+            logger.error("Error while executing on_task_close_benefit_plan", exc_info=exc)
+
     bind_service_signal(
         'task_service.complete_task',
         on_task_complete_service_handler(BenefitPlanService),
@@ -51,5 +76,10 @@ def bind_service_signals():
     bind_service_signal(
         'group_service.select_groups_to_benefit_plan',
         on_confirm_enrollment_of_group,
+        bind_type=ServiceSignalBindType.AFTER
+    )
+    bind_service_signal(
+        'task_service.complete_task',
+        on_task_close_benefit_plan,
         bind_type=ServiceSignalBindType.AFTER
     )

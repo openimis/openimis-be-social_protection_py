@@ -7,6 +7,7 @@ DEFAULT_CONFIG = {
     "gql_benefit_plan_create_perms": ["160002"],
     "gql_benefit_plan_update_perms": ["160003"],
     "gql_benefit_plan_delete_perms": ["160004"],
+    "gql_benefit_plan_close_perms": ["160005"],
     "gql_beneficiary_search_perms": ["170001"],
     "gql_beneficiary_create_perms": ["170002"],
     "gql_beneficiary_update_perms": ["170003"],
@@ -15,6 +16,7 @@ DEFAULT_CONFIG = {
     "gql_schema_create_perms": ["171002"],
     "gql_schema_update_perms": ["171003"],
     "gql_schema_delete_perms": ["171004"],
+
 
     # Create task for model instead of performing crud action
     "gql_check_benefit_plan_update": True,
@@ -28,6 +30,7 @@ DEFAULT_CONFIG = {
     "validation_import_valid_items": "validation.import_valid_items",
     "validation_upload_valid_items": "validation.upload_valid_items",
     "validation_download_invalid_items": "validation.download_invalid_items",
+    "benefit_plan_suspend": "benefit_plan.benefit_plan_suspend",
 
     "validation_import_valid_items_workflow": "beneficiary-import-valid-items.beneficiary-import-valid-items",
     "validation_upload_valid_items_workflow": "beneficiary-upload-valid-items.beneficiary-upload-valid-items",
@@ -50,6 +53,7 @@ class SocialProtectionConfig(AppConfig):
     gql_benefit_plan_create_perms = None
     gql_benefit_plan_update_perms = None
     gql_benefit_plan_delete_perms = None
+    gql_benefit_plan_close_perms = None
     gql_beneficiary_search_perms = None
     gql_beneficiary_create_perms = None
     gql_beneficiary_update_perms = None
@@ -71,6 +75,7 @@ class SocialProtectionConfig(AppConfig):
     validation_upload_valid_items_workflow = None
     validation_enrollment = None
     validation_group_enrollment = None
+    benefit_plan_suspend = None
 
     enable_maker_checker_for_beneficiary_upload = None
     enable_maker_checker_for_beneficiary_update = None

@@ -20,7 +20,8 @@ from social_protection.models import (
     BenefitPlan,
     Beneficiary,
     BenefitPlanDataUploadRecords,
-    GroupBeneficiary
+    GroupBeneficiary,
+    BeneficiaryStatus,
 )
 
 from social_protection.utils import load_dataframe, fetch_summary_of_valid_items, fetch_summary_of_broken_items
@@ -33,6 +34,8 @@ from tasks_management.services import UpdateCheckerLogicServiceMixin, CheckerLog
 from workflow.systems.base import WorkflowHandler
 from workflow.util import result as WorkflowExecutionResult
 from core.models import User
+from core.services.utils import check_authentication as check_authentication, output_exception, \
+    model_representation, output_result_success
 
 from social_protection.apps import SocialProtectionConfig
 
@@ -56,6 +59,23 @@ class BenefitPlanService(BaseService, UpdateCheckerLogicServiceMixin):
     @register_service_signal('benefit_plan_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
+
+    @register_service_signal('benefit_plan_service.close')
+    def close_benefit_plan(self, obj_data):
+        from tasks_management.models import Task
+        from tasks_management.apps import TasksManagementConfig
+        from tasks_management.services import _get_std_task_data_payload, TaskService
+        from social_protection.apps import SocialProtectionConfig
+        benefit_plan = BenefitPlan.objects.filter(id=obj_data.get('id')).first()
+        data = {'benefit_plan_id': benefit_plan.id}
+        TaskService(self.user).create({
+            'source': 'BenefitPlanService',
+            'entity': benefit_plan,
+            'status': Task.Status.RECEIVED,
+            'executor_action_event': TasksManagementConfig.default_executor_event,
+            'business_event': SocialProtectionConfig.benefit_plan_suspend,
+            'data': _get_std_task_data_payload(data)
+        })
 
 
 class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
