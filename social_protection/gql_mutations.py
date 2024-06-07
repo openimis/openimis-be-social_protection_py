@@ -305,6 +305,35 @@ class DeleteBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         ids = graphene.List(graphene.UUID)
 
 
+class CloseBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+    _mutation_class = "CloseBenefitPlanMutation"
+    _mutation_module = "social_protection"
+    _model = BenefitPlan
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if type(user) is AnonymousUser or not user.has_perms(
+                SocialProtectionConfig.gql_benefit_plan_close_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = BenefitPlanService(user)
+        ids = data.get('ids')
+        if ids:
+            with transaction.atomic():
+                for id in ids:
+                    service.close_benefit_plan({'id': id})
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)
+
+
 class CreateGroupBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
     _mutation_class = "CreateGroupBeneficiaryMutation"
     _mutation_module = "social_protection"
