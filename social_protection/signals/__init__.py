@@ -38,8 +38,9 @@ def bind_service_signals():
                     benefit_plan.save(username=user.username)
                     beneficiaries = Beneficiary.objects.filter(benefit_plan=benefit_plan, is_deleted=False)
                     for beneficiary in beneficiaries:
-                        beneficiary.status = BeneficiaryStatus.GRADUATED
-                        beneficiary.save(username=user.username)
+                        if beneficiary.status != BeneficiaryStatus.GRADUATED:
+                            beneficiary.status = BeneficiaryStatus.GRADUATED
+                            beneficiary.save(username=user.username)
         except Exception as exc:
             logger.error("Error while executing on_task_close_benefit_plan", exc_info=exc)
 
