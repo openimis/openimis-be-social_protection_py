@@ -4,7 +4,7 @@ from core.service_signals import ServiceSignalBindType
 from core.signals import bind_service_signal
 from core.models import User
 from social_protection.apps import SocialProtectionConfig
-from social_protection.services import BenefitPlanService, BeneficiaryService, GroupBeneficiaryService
+from social_protection.services import BenefitPlanService, BeneficiaryService, GroupBeneficiaryService, GroupBeneficiary
 from social_protection.models import BenefitPlan, Beneficiary, BeneficiaryStatus
 from social_protection.signals.on_validation_import_valid_items import on_task_complete_import_validated, \
     on_task_resolve
@@ -36,11 +36,18 @@ def bind_service_signals():
                     now = datetime.datetime.now()
                     benefit_plan.date_valid_to = now
                     benefit_plan.save(username=user.username)
-                    beneficiaries = Beneficiary.objects.filter(benefit_plan=benefit_plan, is_deleted=False)
-                    for beneficiary in beneficiaries:
-                        if beneficiary.status != BeneficiaryStatus.GRADUATED:
-                            beneficiary.status = BeneficiaryStatus.GRADUATED
-                            beneficiary.save(username=user.username)
+                    if benefit_plan.type == BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE:
+                        beneficiaries = Beneficiary.objects.filter(benefit_plan=benefit_plan, is_deleted=False)
+                        for beneficiary in beneficiaries:
+                            if beneficiary.status != BeneficiaryStatus.GRADUATED:
+                                beneficiary.status = BeneficiaryStatus.GRADUATED
+                                beneficiary.save(username=user.username)
+                    if benefit_plan.type == BenefitPlan.BenefitPlanType.GROUP_TYPE:
+                        group_beneficiaries = GroupBeneficiary.objects.filter(benefit_plan=benefit_plan, is_deleted=False)
+                        for group_beneficiary in group_beneficiaries:
+                            if group_beneficiary.status != BeneficiaryStatus.GRADUATED:
+                                group_beneficiary.status = BeneficiaryStatus.GRADUATED
+                                group_beneficiary.save(username=user.username)
         except Exception as exc:
             logger.error("Error while executing on_task_close_benefit_plan", exc_info=exc)
 
