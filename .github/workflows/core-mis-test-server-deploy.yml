@@ -27,6 +27,6 @@ jobs:
           ssh -o StrictHostKeyChecking=no -T ${{ secrets.CORE_MIS_DEPLOYMENT_USER }}@${{ secrets.CORE_MIS_DEPLOYMENT_HOST }} -p 1022
           ssh ${{ secrets.CORE_MIS_DEPLOYMENT_USER }}@${{ secrets.CORE_MIS_DEPLOYMENT_HOST }} -p 1022 << EOF
             cd coreMIS/
-            docker-compose build --no-cache backend gateway worker && docker-compose up -d
+            docker-compose build backend gateway && docker-compose up -d
           EOF
           
