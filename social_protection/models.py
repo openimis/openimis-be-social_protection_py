@@ -1,9 +1,11 @@
 from django.contrib.auth.models import AnonymousUser
 from django.db import models
+from django.db.models import Func
 from django.utils.translation import gettext as _
 from pydantic.error_wrappers import ValidationError
 
 from core import models as core_models
+from core.models import UUIDModel, ObjectMutation, MutationLog
 from individual.models import Individual, Group, IndividualDataSourceUpload
 
 
@@ -35,12 +37,18 @@ class BenefitPlan(core_models.HistoryBusinessModel):
     def __str__(self):
         return f'Benefit Plan {self.code}'
 
+
+class BenefitPlanMutation(UUIDModel, ObjectMutation):
+    benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='benefit_plan')
+
+
 class Beneficiary(core_models.HistoryBusinessModel):
     individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     status = models.CharField(max_length=100, choices=BeneficiaryStatus.choices, null=False)
 
-    json_ext = models.JSONField(db_column="Json_ext", default=dict)
+    json_ext = models.JSONField(db_column="Json_ext", blank=True, default=dict)
 
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE:
@@ -56,16 +64,24 @@ class BenefitPlanDataUploadRecords(core_models.HistoryModel):
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     workflow = models.CharField(max_length=50)
 
+    def __str__(self):
+        return f"{self.benefit_plan.code} {self.data_upload.source_name} {self.workflow} {self.date_created}"
+
 
 class GroupBeneficiary(core_models.HistoryBusinessModel):
     group = models.ForeignKey(Group, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     status = models.CharField(max_length=100, choices=BeneficiaryStatus.choices, null=False)
 
-    json_ext = models.JSONField(db_column="Json_ext", default=dict)
+    json_ext = models.JSONField(db_column="Json_ext", blank=True, default=dict)
 
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.GROUP_TYPE:
             raise ValidationError(_("Group beneficiary must be associated with a group benefit plan."))
 
         super().clean()
+
+
+class JSONUpdate(Func):
+    function = 'JSONB_SET'
+    arity = 3

@@ -1,6 +1,5 @@
 import graphene
 import pandas as pd
-import re
 
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
@@ -12,7 +11,7 @@ from django.utils.translation import gettext as _
 from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import ValidationMessageGQLType
 from core.schema import OrderedDjangoFilterConnectionField
-from core.utils import append_validity_filter
+from core.utils import append_validity_filter, validate_json_schema
 from social_protection.apps import SocialProtectionConfig
 from social_protection.gql_mutations import (
     CreateBenefitPlanMutation,
@@ -25,13 +24,15 @@ from social_protection.gql_mutations import (
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
-    BeneficiaryGQLType, GroupBeneficiaryGQLType, BenefitPlanDataUploadQGLType
+    BeneficiaryGQLType, GroupBeneficiaryGQLType,
+    BenefitPlanDataUploadQGLType, BenefitPlanSchemaFieldsGQLType,
+    BenefitPlanHistoryGQLType
 )
 from social_protection.models import (
     BenefitPlan,
     Beneficiary, GroupBeneficiary, BenefitPlanDataUploadRecords
 )
-from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name, validate_json_schema
+from social_protection.validation import validate_bf_unique_code, validate_bf_unique_name
 import graphene_django_optimizer as gql_optimizer
 
 
@@ -42,6 +43,11 @@ def patch_details(beneficiary_df: pd.DataFrame):
     df_final = pd.concat([beneficiary_df, df_unfolded], axis=1)
     df_final = df_final.drop('json_ext', axis=1)
     return df_final
+
+
+class BfTypeEnum(graphene.Enum):
+    INDIVIDUAL = BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE
+    GROUP = BenefitPlan.BenefitPlanType.GROUP_TYPE
 
 
 class Query(ExportableQueryMixin, graphene.ObjectType):
@@ -111,6 +117,24 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         ValidationMessageGQLType,
         bf_schema=graphene.String(required=True),
         description="Checks that the specified Benefit Plan schema is valid"
+    )
+    benefit_plan_schema_field = graphene.Field(
+        BenefitPlanSchemaFieldsGQLType,
+        bf_type=graphene.Argument(BfTypeEnum),
+        description="Endpoint responsible for getting all fields from all BF schemas"
+    )
+    benefit_plan_history = OrderedDjangoFilterConnectionField(
+        BenefitPlanHistoryGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        dateValidFrom__Gte=graphene.DateTime(),
+        dateValidTo__Lte=graphene.DateTime(),
+        applyDefaultValidityFilter=graphene.Boolean(),
+        client_mutation_id=graphene.String(),
+        individual_id=graphene.String(),
+        group_id=graphene.String(),
+        beneficiary_status=graphene.String(),
+        search=graphene.String(),
+        sort_alphabetically=graphene.Boolean(),
     )
 
     def resolve_bf_code_validity(self, info, **kwargs):
@@ -216,6 +240,20 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         query = GroupBeneficiary.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
+    def resolve_awaiting_beneficiary(self, info, **kwargs):
+        filters = append_validity_filter(**kwargs)
+
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_beneficiary_search_perms
+        )
+        query = GroupBeneficiary.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
     def resolve_beneficiary_data_upload_history(self, info, **kwargs):
         filters = append_validity_filter(**kwargs)
 
@@ -230,10 +268,64 @@ class Query(ExportableQueryMixin, graphene.ObjectType):
         query = BenefitPlanDataUploadRecords.objects.filter(*filters)
         return gql_optimizer.query(query, info)
 
+    def resolve_benefit_plan_schema_field(self, info, **kwargs):
+        filters = append_validity_filter(**kwargs)
+
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_schema_search_perms
+        )
+
+        bf_type = kwargs.get("bf_type", None)
+        if bf_type:
+            filters.append(Q(type=bf_type))
+
+        query = BenefitPlan.objects.filter(*filters)
+        return gql_optimizer.query(query, info)
+
     @staticmethod
     def _check_permissions(user, permission):
         if type(user) is AnonymousUser or not user.id or not user.has_perms(permission):
             raise PermissionError("Unauthorized")
+
+    def resolve_benefit_plan_history(self, info, **kwargs):
+        filters = append_validity_filter(**kwargs)
+
+        search = kwargs.get("search", None)
+        if search:
+            search_terms = search.split(' ')
+            search_queries = Q()
+            for term in search_terms:
+                search_queries |= Q(code__icontains=term) | Q(name__icontains=term)
+            filters.append(search_queries)
+
+        client_mutation_id = kwargs.get("client_mutation_id", None)
+        if client_mutation_id:
+            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+
+        individual_id = kwargs.get("individual_id", None)
+        if individual_id:
+            filters.append(Q(beneficiary__individual__id=individual_id))
+
+        group_id = kwargs.get("group_id", None)
+        if group_id:
+            filters.append(Q(groupbeneficiary__group__id=group_id))
+
+        beneficiary_status = kwargs.get("beneficiary_status", None)
+        if beneficiary_status:
+            filters.append(Q(beneficiary__status=beneficiary_status) | Q(groupbeneficiary__status=beneficiary_status))
+
+        Query._check_permissions(
+            info.context.user,
+            SocialProtectionConfig.gql_benefit_plan_search_perms
+        )
+
+        query = BenefitPlan.history.filter(*filters)
+
+        sort_alphabetically = kwargs.get("sort_alphabetically", None)
+        if sort_alphabetically:
+            query = query.order_by('code')
+        return gql_optimizer.query(query, info)
 
 
 class Mutation(graphene.ObjectType):

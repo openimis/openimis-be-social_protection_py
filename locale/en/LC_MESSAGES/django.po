@@ -33,12 +33,6 @@ msgstr "BenefitPlan code %(code) already exists"
 msgid "social_protection.validation.benefit_plan.name_exists"
 msgstr "BenefitPlan name %(name) already exists"
 
-#: social_protection/validation.py:70
-#: social_protection/validation.py:66
-#, python-format
-msgid "social_protection.validation.benefit_plan.invalid_schema"
-msgstr "BenefitPlan schema is not valid %(error)"
-
 #: social_protection/validation.py:73
 msgid "social_protection.validation.field_empty"
 msgstr "%(field) can't be empty"
