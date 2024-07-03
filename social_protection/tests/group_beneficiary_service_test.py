@@ -10,7 +10,7 @@ from social_protection.tests.data import (
     service_add_payload,
     service_beneficiary_add_payload, service_beneficiary_update_payload,
 )
-from social_protection.tests.helpers import LogInHelper
+from core.test_helpers import LogInHelper
 
 
 class GroupBeneficiaryServiceTest(TestCase):

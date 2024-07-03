@@ -2,7 +2,7 @@ from django.test import TestCase
 from social_protection.models import BenefitPlan, BenefitPlanDataUploadRecords
 from individual.models import IndividualDataSource, IndividualDataSourceUpload
 from social_protection.services import BeneficiaryImportService
-from social_protection.tests.helpers import LogInHelper
+from core.test_helpers import LogInHelper
 from social_protection.tests.data import service_add_payload
 from individual.models import Individual
 from individual.tests.data import service_add_individual_payload

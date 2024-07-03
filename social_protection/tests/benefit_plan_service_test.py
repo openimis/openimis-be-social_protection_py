@@ -10,7 +10,7 @@ from social_protection.tests.data import (
     service_update_payload, service_add_payload_same_code, service_add_payload_same_name,
     service_add_payload_invalid_schema
 )
-from social_protection.tests.helpers import LogInHelper
+from core.test_helpers import LogInHelper
 
 
 class BenefitPlanServiceTest(TestCase):
