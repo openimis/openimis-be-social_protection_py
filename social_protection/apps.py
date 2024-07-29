@@ -1,6 +1,8 @@
 from django.apps import AppConfig
 
 from core.custom_filters import CustomFilterRegistryPoint
+from core.data_masking import MaskingClassRegistryPoint
+
 
 DEFAULT_CONFIG = {
     "gql_benefit_plan_search_perms": ["160001"],
@@ -38,8 +40,15 @@ DEFAULT_CONFIG = {
     "validation_group_enrollment": "validation-group-enrollment",
 
     "enable_maker_checker_logic_enrollment": True,
-
-
+    "beneficiary_mask_fields": [
+        'json_ext.beneficiary_data_source',
+        'json_ext.educated_level'
+    ],
+    "group_beneficiary_mask_fields": [
+        'json_ext.beneficiary_data_source',
+        'json_ext.educated_level'
+    ],
+    "social_protection_masking_enabled": True,
     "enable_python_workflows": True,
     "opensearch_synch": False,
 }
@@ -83,6 +92,9 @@ class SocialProtectionConfig(AppConfig):
     enable_python_workflows = None
     enable_maker_checker_logic_enrollment = None
     opensearch_synch = None
+    beneficiary_mask_fields = None
+    group_beneficiary_mask_fields = None
+    social_protection_masking_enabled = None
 
     def ready(self):
         from core.models import ModuleConfiguration
@@ -90,6 +102,7 @@ class SocialProtectionConfig(AppConfig):
         cfg = ModuleConfiguration.get_or_default(self.name, DEFAULT_CONFIG)
         self.__load_config(cfg)
         self._set_up_workflows()
+        self.__register_masking_class()
 
     def _set_up_workflows(self):
         from workflow.systems.python import PythonWorkflowAdaptor
@@ -153,6 +166,15 @@ class SocialProtectionConfig(AppConfig):
         CustomFilterRegistryPoint.register_custom_filters(
             module_name=cls.name,
             custom_filter_class_list=[BenefitPlanCustomFilterWizard]
+        )
+
+    def __register_masking_class(cls):
+        from social_protection.data_masking import (
+            BeneficiaryMask,
+            GroupBeneficiaryMask
+        )
+        MaskingClassRegistryPoint.register_masking_class(
+            masking_class_list=[BeneficiaryMask(), GroupBeneficiaryMask()]
         )
 
     @staticmethod
