@@ -1,4 +1,5 @@
 import logging
+import json
 import pandas as pd
 
 from django.db.models import Q
@@ -17,6 +18,39 @@ from social_protection.services import BeneficiaryImportService
 from workflow.services import WorkflowService
 
 logger = logging.getLogger(__name__)
+
+
+def get_global_schema_fields(benefit_plan):
+    schema = benefit_plan.beneficiary_data_schema if benefit_plan.beneficiary_data_schema \
+        else json.loads(IndividualConfig.individual_schema)
+    schema_properties = set(schema.get('properties', {}).keys())
+    schema_properties.update(['recipient_info', 'group_code'])
+    return list(schema_properties)
+
+
+@api_view(["GET"])
+@permission_classes([check_user_rights(SocialProtectionConfig.gql_beneficiary_create_perms, )])
+def download_template_benefit_plan_file(request):
+    benefit_plan_uuid = request.GET.get('benefit_plan_uuid')
+    benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_uuid, is_deleted=False).first()
+    try:
+        base_fields = ['first_name', 'last_name', 'dob', 'id']
+        extra_fields = get_global_schema_fields(benefit_plan)
+        all_fields = base_fields + extra_fields
+        template_df = pd.DataFrame(columns=all_fields)
+
+        def stream_csv():
+            output = template_df.to_csv(index=False)
+            yield output.encode('utf-8')
+
+        response = StreamingHttpResponse(
+            stream_csv(), content_type='text/csv'
+        )
+        response['Content-Disposition'] = 'attachment; filename="beneficiary_upload_template.csv"'
+        return response
+    except Exception as exc:
+        logger.error("Unexpected error while generating template file", exc_info=exc)
+        return Response({'success': False, 'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
