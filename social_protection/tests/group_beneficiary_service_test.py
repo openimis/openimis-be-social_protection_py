@@ -7,10 +7,10 @@ from individual.models import Group
 from social_protection.models import BenefitPlan, GroupBeneficiary
 from social_protection.services import GroupBeneficiaryService
 from social_protection.tests.data import (
-    service_add_payload,
     service_beneficiary_add_payload, service_beneficiary_update_payload,
 )
 from core.test_helpers import LogInHelper
+from social_protection.tests.test_helpers import create_benefit_plan
 
 
 class GroupBeneficiaryServiceTest(TestCase):
@@ -25,7 +25,7 @@ class GroupBeneficiaryServiceTest(TestCase):
         cls.user = LogInHelper().get_or_create_user_api()
         cls.service = GroupBeneficiaryService(cls.user)
         cls.query_all = GroupBeneficiary.objects.filter(is_deleted=False)
-        cls.benefit_plan = cls.__create_benefit_plan()
+        cls.benefit_plan = create_benefit_plan(cls.user.username)
         cls.group = cls.__create_group()
         cls.payload = {
             **service_beneficiary_add_payload,
@@ -63,17 +63,6 @@ class GroupBeneficiaryServiceTest(TestCase):
         self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
         query = self.query_all.filter(uuid=uuid)
         self.assertEqual(query.count(), 0)
-
-    @classmethod
-    def __create_benefit_plan(cls):
-        object_data = {
-            **service_add_payload
-        }
-
-        benefit_plan = BenefitPlan(**object_data)
-        benefit_plan.save(username=cls.user.username)
-
-        return benefit_plan
 
     @classmethod
     def __create_group(cls):
