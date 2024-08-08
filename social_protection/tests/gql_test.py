@@ -82,3 +82,58 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
         self.assertEqual(individual_data['lastName'], self.individual.last_name)
         self.assertEqual(individual_data['dob'], self.individual.dob.strftime('%Y-%m-%d'))
 
+    def test_query_beneficiary_custom_filter(self):
+        query_str = f"""
+            query {{
+              beneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                customFilters: ["number_of_children__lt__integer=2"],
+                isDeleted: false,
+                first: 10
+              ) {{
+                totalCount
+                pageInfo {{
+                  hasNextPage
+                  hasPreviousPage
+                  startCursor
+                  endCursor
+                }}
+                edges {{
+                  node {{
+                    id
+                    jsonExt
+                    benefitPlan {{
+                      id
+                    }}
+                    individual {{
+                      firstName
+                      lastName
+                      dob
+                    }}
+                    status
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+
+        beneficiary_data = response_data['data']['beneficiary']
+        self.assertEqual(beneficiary_data['totalCount'], 0)
+
+        query_str = query_str.replace('__lt__', '__lte__')
+
+        response = self.query(query_str,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+
+        beneficiary_data = response_data['data']['beneficiary']
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+
+        beneficiary_node = beneficiary_data['edges'][0]['node']
+        individual_data = beneficiary_node['individual']
+        self.assertEqual(individual_data['firstName'], self.individual.first_name)

@@ -1,3 +1,5 @@
+from core.datetimes.ad_datetime import datetime
+
 service_add_payload = {
     "code": "example",
     "name": "example_name",
@@ -54,6 +56,40 @@ service_add_payload_invalid_schema = {
     },
     "date_valid_from": "2023-01-01",
     "date_valid_to": "2023-12-31",
+}
+
+service_add_payload_valid_schema = {
+    "code": "example1",
+    "name": "With Schema",
+    "max_beneficiaries": 20,
+    "ceiling_per_beneficiary": "0.00",
+    "beneficiary_data_schema": {
+      "$schema": "http://json-schema.org/draft-04/schema#",
+      "properties": {
+        "email": {
+          "type": "string",
+        },
+        "able_bodied": {
+          "type": "boolean",
+        },
+        "number_of_children": {
+          "type": "integer",
+        }
+      }
+    },
+    "date_valid_from": "2023-01-01",
+    "date_valid_to": "2023-12-31",
+}
+
+service_add_individual_payload_with_ext = {
+    'first_name': 'Foo',
+    'last_name': 'Bar',
+    'dob': datetime.now(),
+    'json_ext': {
+        'email': 'foo.bar@example.com',
+        'able_bodied': True,
+        'number_of_children': 2,
+    }
 }
 
 service_add_payload_no_ext = {
