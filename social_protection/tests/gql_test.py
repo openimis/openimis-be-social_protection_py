@@ -33,10 +33,34 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
             cls.user=create_test_interactive_user(username='admin')
         # some test data so as to created contract properly
         cls.user_token = get_token(cls.user, cls.BaseTestContext(user=cls.user))
-        cls.benefit_plan = create_benefit_plan(cls.user.username)
-        cls.individual = create_individual(cls.user.username)
+        cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
+            'code': 'SGQLTest'
+        })
+        cls.individual_2child = create_individual(cls.user.username)
+        cls.individual_1child = create_individual(cls.user.username, payload_override={
+            'first_name': 'OneChild',
+            'json_ext': {
+                'number_of_children': 1
+            }
+        })
+        cls.individual =  create_individual(cls.user.username, payload_override={
+            'first_name': 'NoChild',
+            'json_ext': {
+                'number_of_children': 0
+            }
+        })
+        cls.individual_not_enrolled =  create_individual(cls.user.username, payload_override={
+            'first_name': 'Not enrolled',
+            'json_ext': {
+                'number_of_children': 0,
+                'able_bodied': True
+            }
+        })
         cls.service = BeneficiaryService(cls.user)
-        add_individual_to_benefit_plan(cls.service, cls.individual, cls.benefit_plan)
+        add_individual_to_benefit_plan(cls.service, cls.individual_2child, cls.benefit_plan)
+        add_individual_to_benefit_plan(cls.service, cls.individual_1child, cls.benefit_plan)
+        add_individual_to_benefit_plan(cls.service, cls.individual,
+                                       cls.benefit_plan, payload_override={'status': 'ACTIVE'})
 
     def test_query_beneficiary_basic(self):
         response = self.query(
@@ -53,6 +77,7 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
                 edges {{
                   node {{
                     id
+                    jsonExt
                     benefitPlan {{
                       id
                     }}
@@ -73,14 +98,16 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
 
         # Asserting the response has one beneficiary record
         beneficiary_data = response_data['data']['beneficiary']
-        self.assertEqual(beneficiary_data['totalCount'], 1)
+        self.assertEqual(beneficiary_data['totalCount'], 3)
 
-        # Asserting it matches the expected individual
-        beneficiary_node = beneficiary_data['edges'][0]['node']
-        individual_data = beneficiary_node['individual']
-        self.assertEqual(individual_data['firstName'], self.individual.first_name)
-        self.assertEqual(individual_data['lastName'], self.individual.last_name)
-        self.assertEqual(individual_data['dob'], self.individual.dob.strftime('%Y-%m-%d'))
+        enrolled_first_names = list(
+            e['node']['individual']['firstName'] for e in beneficiary_data['edges']
+        )
+        self.assertTrue(self.individual.first_name in enrolled_first_names)
+        self.assertTrue(self.individual_1child.first_name in enrolled_first_names)
+        self.assertTrue(self.individual_2child.first_name in enrolled_first_names)
+        self.assertFalse(self.individual_not_enrolled.first_name in enrolled_first_names)
+
 
     def test_query_beneficiary_custom_filter(self):
         query_str = f"""
@@ -122,9 +149,16 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
         response_data = json.loads(response.content)
 
         beneficiary_data = response_data['data']['beneficiary']
-        self.assertEqual(beneficiary_data['totalCount'], 0)
+        self.assertEqual(beneficiary_data['totalCount'], 2)
 
-        query_str = query_str.replace('__lt__', '__lte__')
+        returned_first_names = list(
+            e['node']['individual']['firstName'] for e in beneficiary_data['edges']
+        )
+        self.assertTrue(self.individual.first_name in returned_first_names)
+        self.assertTrue(self.individual_1child.first_name in returned_first_names)
+        self.assertFalse(self.individual_2child.first_name in returned_first_names)
+
+        query_str = query_str.replace('__lt__', '__gte__')
 
         response = self.query(query_str,
                               headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
@@ -136,4 +170,55 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
 
         beneficiary_node = beneficiary_data['edges'][0]['node']
         individual_data = beneficiary_node['individual']
-        self.assertEqual(individual_data['firstName'], self.individual.first_name)
+        self.assertEqual(individual_data['firstName'], self.individual_2child.first_name)
+
+
+    def test_query_beneficiary_status_filter(self):
+        query_str = f"""
+            query {{
+              beneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                status: POTENTIAL,
+                isDeleted: false,
+                first: 10
+              ) {{
+                totalCount
+                pageInfo {{
+                  hasNextPage
+                  hasPreviousPage
+                  startCursor
+                  endCursor
+                }}
+                edges {{
+                  node {{
+                    id
+                    jsonExt
+                    benefitPlan {{
+                      id
+                    }}
+                    individual {{
+                      firstName
+                      lastName
+                      dob
+                    }}
+                    status
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+
+        beneficiary_data = response_data['data']['beneficiary']
+        self.assertEqual(beneficiary_data['totalCount'], 2)
+
+        enrolled_first_names = list(
+            e['node']['individual']['firstName'] for e in beneficiary_data['edges']
+        )
+        self.assertFalse(self.individual.first_name in enrolled_first_names)
+        self.assertTrue(self.individual_1child.first_name in enrolled_first_names)
+        self.assertTrue(self.individual_2child.first_name in enrolled_first_names)
+        self.assertFalse(self.individual_not_enrolled.first_name in enrolled_first_names)

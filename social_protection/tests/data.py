@@ -77,6 +77,26 @@ service_add_payload_valid_schema = {
         }
       }
     },
+    "json_ext": {
+      'advanced_criteria': {
+        'POTENTIAL': [
+          {
+            'type': 'integer',
+            'field': 'number_of_children',
+            'value': '1',
+            'filter': 'gt'
+          }
+        ],
+        'ACTIVE': [
+          {
+            'type': 'boolean',
+            'field': 'able_bodied',
+            'value': 'False',
+            'filter': 'exact'
+          }
+        ]
+      }
+    },
     "date_valid_from": "2023-01-01",
     "date_valid_to": "2023-12-31",
 }
