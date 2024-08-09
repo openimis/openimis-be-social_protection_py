@@ -2,7 +2,7 @@ import graphene
 import pandas as pd
 
 from django.contrib.auth.models import AnonymousUser
-from django.db.models import Q
+from django.db.models import Q, Case, When, BooleanField, Value
 from django.core.exceptions import PermissionDenied
 
 from django.utils.translation import gettext as _
@@ -208,26 +208,72 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         return gql_optimizer.query(query, info)
 
     def resolve_beneficiary(self, info, **kwargs):
-        filters = append_validity_filter(**kwargs)
+        def _build_filters(info, **kwargs):
+            filters = append_validity_filter(**kwargs)
 
-        client_mutation_id = kwargs.get("client_mutation_id", None)
-        if client_mutation_id:
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            client_mutation_id = kwargs.get("client_mutation_id")
+            if client_mutation_id:
+                filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
 
-        Query._check_permissions(
-            info.context.user,
-            SocialProtectionConfig.gql_beneficiary_search_perms
-        )
-        query = Beneficiary.objects.filter(*filters)
+            Query._check_permissions(
+                info.context.user,
+                SocialProtectionConfig.gql_beneficiary_search_perms
+            )
+            return filters
 
-        custom_filters = kwargs.get("customFilters", None)
-        if custom_filters:
-            query = CustomFilterWizardStorage.build_custom_filters_queryset(
+        def _apply_custom_filters(query, **kwargs):
+            custom_filters = kwargs.get("customFilters")
+            if custom_filters:
+                query = CustomFilterWizardStorage.build_custom_filters_queryset(
+                    Query.module_name,
+                    Query.object_type,
+                    custom_filters,
+                    query
+                )
+            return query
+
+        def _get_eligible_uuids(info, **kwargs):
+            status = kwargs.get("status")
+            benefit_plan_id = kwargs.get("benefit_plan__id")
+            default_results = (set(), False)  # No eligibility check was performed
+
+            if not status or not benefit_plan_id:
+                return default_results
+
+            benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).first()
+            if not benefit_plan:
+                return default_results
+
+            eligibility_filters = (benefit_plan.json_ext or {}).get('advanced_criteria', {}).get(status)
+            if not eligibility_filters:
+                return default_results
+
+            query_eligible = CustomFilterWizardStorage.build_custom_filters_queryset(
                 Query.module_name,
                 Query.object_type,
-                custom_filters,
+                eligibility_filters,
                 query
             )
+            eligible_beneficiaries = gql_optimizer.query(query_eligible, info)
+            eligible_uuids = set(eligible_beneficiaries.values_list('uuid', flat=True))
+            return eligible_uuids, True  # Eligibility check was performed
+
+        def _annotate_is_eligible(query, eligible_uuids, eligibility_check_performed):
+            return query.annotate(
+                is_eligible=Case(
+                    When(uuid__in=eligible_uuids, then=Value(True)),
+                    When(~Q(uuid__in=eligible_uuids) & Value(eligibility_check_performed), then=Value(False)),
+                    default=Value(None),
+                    output_field=BooleanField()
+                )
+            )
+
+        filters = _build_filters(info, **kwargs)
+        query = _apply_custom_filters(Beneficiary.objects.filter(*filters), **kwargs)
+
+        eligible_uuids, eligibility_check_performed = _get_eligible_uuids(info, **kwargs)
+        query = _annotate_is_eligible(query, eligible_uuids, eligibility_check_performed)
+
         return gql_optimizer.query(query, info)
 
     def resolve_group_beneficiary(self, info, **kwargs):

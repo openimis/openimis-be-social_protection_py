@@ -62,6 +62,7 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
 
 class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
+    is_eligible = graphene.Boolean()
 
     class Meta:
         model = Beneficiary
@@ -79,6 +80,9 @@ class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
             "version": ["exact"],
         }
         connection_class = ExtendedConnection
+
+    def resolve_is_eligible(self, info):
+        return self.is_eligible
 
 
 class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):

@@ -87,6 +87,7 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
                       dob
                     }}
                     status
+                    isEligible
                   }}
                 }}
               }}
@@ -107,6 +108,12 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
         self.assertTrue(self.individual_1child.first_name in enrolled_first_names)
         self.assertTrue(self.individual_2child.first_name in enrolled_first_names)
         self.assertFalse(self.individual_not_enrolled.first_name in enrolled_first_names)
+
+        # eligibility is status specific, so None is expected for all records without status filter
+        eligible_none = list(
+            e['node']['isEligible'] is None for e in beneficiary_data['edges']
+        )
+        self.assertTrue(all(eligible_none))
 
 
     def test_query_beneficiary_custom_filter(self):
@@ -202,6 +209,7 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
                       dob
                     }}
                     status
+                    isEligible
                   }}
                 }}
               }}
@@ -222,3 +230,15 @@ class SocialProtectionGQLTest(openIMISGraphQLTestCase):
         self.assertTrue(self.individual_1child.first_name in enrolled_first_names)
         self.assertTrue(self.individual_2child.first_name in enrolled_first_names)
         self.assertFalse(self.individual_not_enrolled.first_name in enrolled_first_names)
+
+        def find_beneficiary_by_first_name(first_name):
+            for edge in beneficiary_data['edges']:
+                if edge['node']['individual']['firstName'] == first_name:
+                    return edge['node']
+            return None
+
+        beneficiary_1child = find_beneficiary_by_first_name(self.individual_1child.first_name)
+        self.assertFalse(beneficiary_1child['isEligible'])
+
+        beneficiary_2child = find_beneficiary_by_first_name(self.individual_2child.first_name)
+        self.assertTrue(beneficiary_2child['isEligible'])

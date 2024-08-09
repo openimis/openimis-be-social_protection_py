@@ -67,8 +67,13 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         :return: The updated queryset with additional filters applied for example: Queryset[Beneficiary].
         """
         for filter_part in custom_filters:
-            field, value = filter_part.split('=')
-            field, value_type = field.rsplit('__', 1)
+            if isinstance(filter_part, dict):
+                value_type = filter_part['type']
+                value = filter_part['value']
+                field = filter_part['field'] + '__' + filter_part['filter']
+            else:
+                field, value = filter_part.split('=')
+                field, value_type = field.rsplit('__', 1)
             value = self.__cast_value(value, value_type)
             filter_kwargs = {f"{relation}__json_ext__{field}" if relation else f"json_ext__{field}": value}
             query = query.filter(**filter_kwargs)
