@@ -232,7 +232,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
                 )
             return query
 
-        def _get_eligible_uuids(info, **kwargs):
+        def _get_eligible_uuids(query, info, **kwargs):
             status = kwargs.get("status")
             benefit_plan_id = kwargs.get("benefit_plan__id")
             default_results = (set(), False)  # No eligibility check was performed
@@ -271,7 +271,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         filters = _build_filters(info, **kwargs)
         query = _apply_custom_filters(Beneficiary.objects.filter(*filters), **kwargs)
 
-        eligible_uuids, eligibility_check_performed = _get_eligible_uuids(info, **kwargs)
+        eligible_uuids, eligibility_check_performed = _get_eligible_uuids(query, info, **kwargs)
         query = _annotate_is_eligible(query, eligible_uuids, eligibility_check_performed)
 
         return gql_optimizer.query(query, info)

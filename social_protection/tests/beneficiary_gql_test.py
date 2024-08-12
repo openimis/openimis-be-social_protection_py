@@ -115,6 +115,53 @@ class BeneficiaryGQLTest(openIMISGraphQLTestCase):
         self.assertTrue(all(eligible_none))
 
 
+    def test_query_beneficiary_individual_filter(self):
+        query_str = f"""
+            query {{
+              beneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                individual_FirstName_Icontains: "no",
+                first: 10
+              ) {{
+                totalCount
+                pageInfo {{
+                  hasNextPage
+                  hasPreviousPage
+                  startCursor
+                  endCursor
+                }}
+                edges {{
+                  node {{
+                    id
+                    jsonExt
+                    benefitPlan {{
+                      id
+                    }}
+                    individual {{
+                      firstName
+                      lastName
+                      dob
+                    }}
+                    status
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+
+        beneficiary_data = response_data['data']['beneficiary']
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+
+        self.assertEqual(
+            beneficiary_data['edges'][0]['node']['individual']['firstName'],
+            self.individual.first_name
+        )
+
+
     def test_query_beneficiary_custom_filter(self):
         query_str = f"""
             query {{
@@ -241,3 +288,59 @@ class BeneficiaryGQLTest(openIMISGraphQLTestCase):
 
         beneficiary_2child = find_beneficiary_by_first_name(self.individual_2child.first_name)
         self.assertTrue(beneficiary_2child['isEligible'])
+
+
+    def test_query_beneficiary_eligibility_filter(self):
+        query_str = f"""
+            query {{
+              beneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                status: POTENTIAL,
+                isEligible: true,
+                isDeleted: false,
+                first: 10
+              ) {{
+                totalCount
+                pageInfo {{
+                  hasNextPage
+                  hasPreviousPage
+                  startCursor
+                  endCursor
+                }}
+                edges {{
+                  node {{
+                    id
+                    jsonExt
+                    benefitPlan {{
+                      id
+                    }}
+                    individual {{
+                      firstName
+                      lastName
+                      dob
+                    }}
+                    status
+                    isEligible
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+
+        beneficiary_data = response_data['data']['beneficiary']
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+
+        enrolled_first_names = list(
+            e['node']['individual']['firstName'] for e in beneficiary_data['edges']
+        )
+        self.assertFalse(self.individual_1child.first_name in enrolled_first_names)
+        self.assertTrue(self.individual_2child.first_name in enrolled_first_names)
+
+        eligible = list(
+            e['node']['isEligible'] for e in beneficiary_data['edges']
+        )
+        self.assertTrue(all(eligible))

@@ -2,6 +2,8 @@ import graphene
 from django.contrib.auth.models import AnonymousUser
 from graphene import ObjectType
 from graphene_django import DjangoObjectType
+import django_filters
+from graphene_django.filter import DjangoFilterConnectionField
 
 from contribution_plan.models import PaymentPlan
 from core import prefix_filterset, ExtendedConnection
@@ -59,15 +61,12 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
     def resolve_has_payment_plans(self, info):
         return PaymentPlan.objects.filter(benefit_plan_id=self.id).exists()
 
-
-class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
-    uuid = graphene.String(source='uuid')
-    is_eligible = graphene.Boolean()
+class BeneficiaryFilter(django_filters.FilterSet):
+    is_eligible = django_filters.BooleanFilter(method='filter_is_eligible')
 
     class Meta:
         model = Beneficiary
-        interfaces = (graphene.relay.Node,)
-        filter_fields = {
+        fields = {
             "id": ["exact"],
             "status": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
@@ -79,6 +78,19 @@ class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
             "is_deleted": ["exact"],
             "version": ["exact"],
         }
+
+    def filter_is_eligible(self, queryset, name, value):
+        return queryset.filter(is_eligible=value)
+
+
+class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
+    uuid = graphene.String(source='uuid')
+    is_eligible = graphene.Boolean()
+
+    class Meta:
+        model = Beneficiary
+        interfaces = (graphene.relay.Node,)
+        filterset_class = BeneficiaryFilter
         connection_class = ExtendedConnection
 
     def resolve_is_eligible(self, info):
