@@ -1,4 +1,3 @@
-import base64
 from unittest import mock
 import graphene
 from core.models import User
@@ -15,7 +14,7 @@ from social_protection.tests.test_helpers import create_benefit_plan,\
 from social_protection.services import BeneficiaryService
 import json
 
-class SocialProtectionGQLTest(openIMISGraphQLTestCase):
+class BeneficiaryGQLTest(openIMISGraphQLTestCase):
     schema = Schema(query=sp_schema.Query)
 
     class BaseTestContext:
