@@ -13,6 +13,7 @@ from social_protection.tests.data import (
     service_beneficiary_update_payload
 )
 from core.test_helpers import LogInHelper
+from social_protection.tests.test_helpers import create_benefit_plan, create_individual
 
 
 class BeneficiaryServiceTest(TestCase):
@@ -27,8 +28,8 @@ class BeneficiaryServiceTest(TestCase):
         cls.user = LogInHelper().get_or_create_user_api()
         cls.service = BeneficiaryService(cls.user)
         cls.query_all = Beneficiary.objects.filter(is_deleted=False)
-        cls.benefit_plan = cls.__create_benefit_plan()
-        cls.individual = cls.__create_individual()
+        cls.benefit_plan = create_benefit_plan(cls.user.username)
+        cls.individual = create_individual(cls.user.username)
         cls.payload = {
             **service_beneficiary_add_payload,
             "individual_id": cls.individual.id,
@@ -65,25 +66,3 @@ class BeneficiaryServiceTest(TestCase):
         self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
         query = self.query_all.filter(uuid=uuid)
         self.assertEqual(query.count(), 0)
-
-    @classmethod
-    def __create_benefit_plan(cls):
-        object_data = {
-            **service_add_payload
-        }
-
-        benefit_plan = BenefitPlan(**object_data)
-        benefit_plan.save(username=cls.user.username)
-
-        return benefit_plan
-
-    @classmethod
-    def __create_individual(cls):
-        object_data = {
-            **service_add_individual_payload
-        }
-
-        individual = Individual(**object_data)
-        individual.save(username=cls.user.username)
-
-        return individual
