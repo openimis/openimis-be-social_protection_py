@@ -417,7 +417,7 @@ class BeneficiaryTaskCreatorService:
             'source_name': upload_record.data_upload.source_name,
             'workflow': upload_record.workflow,
             'percentage_of_invalid_items': self.__calculate_percentage_of_invalid_items(upload_id),
-            'data_upload_id': upload_id
+            'data_upload_id': str(upload_id)
         }
         TaskService(self.user).create({
             'source': 'import_valid_items',

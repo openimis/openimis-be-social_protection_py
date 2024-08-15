@@ -77,7 +77,7 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
 
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.GROUP_TYPE:
-            raise ValidationError(_("Group beneficiary must be associated with a group benefit plan."))
+            raise ValidationError(_("Group beneficiary must be associated with a benefit plan type = GROUP."))
 
         super().clean()
 

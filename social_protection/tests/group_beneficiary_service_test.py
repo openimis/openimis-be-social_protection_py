@@ -11,6 +11,7 @@ from social_protection.tests.data import (
 )
 from core.test_helpers import LogInHelper
 from social_protection.tests.test_helpers import create_benefit_plan
+from datetime import datetime
 
 
 class GroupBeneficiaryServiceTest(TestCase):
@@ -25,8 +26,10 @@ class GroupBeneficiaryServiceTest(TestCase):
         cls.user = LogInHelper().get_or_create_user_api()
         cls.service = GroupBeneficiaryService(cls.user)
         cls.query_all = GroupBeneficiary.objects.filter(is_deleted=False)
-        cls.benefit_plan = create_benefit_plan(cls.user.username)
-        cls.group = cls.__create_group()
+        cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
+            'type': "GROUP"
+        })
+        cls.group = cls.__create_group(object_data={'code': str(datetime.now())})
         cls.payload = {
             **service_beneficiary_add_payload,
             "group_id": cls.group.id,
@@ -65,9 +68,8 @@ class GroupBeneficiaryServiceTest(TestCase):
         self.assertEqual(query.count(), 0)
 
     @classmethod
-    def __create_group(cls):
-        object_data = {}
-
+    def __create_group(cls, object_data={}):
+        
         group = Group(**object_data)
         group.save(username=cls.user.username)
 

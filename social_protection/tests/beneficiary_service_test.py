@@ -28,7 +28,10 @@ class BeneficiaryServiceTest(TestCase):
         cls.user = LogInHelper().get_or_create_user_api()
         cls.service = BeneficiaryService(cls.user)
         cls.query_all = Beneficiary.objects.filter(is_deleted=False)
-        cls.benefit_plan = create_benefit_plan(cls.user.username)
+        cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
+            'code': 'SGQLTest',
+            'type': "INDIVIDUAL"
+        })
         cls.individual = create_individual(cls.user.username)
         cls.payload = {
             **service_beneficiary_add_payload,
