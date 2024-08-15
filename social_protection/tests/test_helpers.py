@@ -37,6 +37,7 @@ def add_individual_to_benefit_plan(service, individual, benefit_plan, payload_ov
         "benefit_plan_id": benefit_plan.id,
         "json_ext": individual.json_ext,
     }
+    benefit_plan.type = BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE
     updated_payload = merge_dicts(payload, payload_override)
     result = service.create(updated_payload)
     assert result.get('success', False), result.get('detail', "No details provided")

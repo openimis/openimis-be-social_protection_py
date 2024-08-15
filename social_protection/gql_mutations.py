@@ -189,7 +189,7 @@ class DeleteBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
 
         with transaction.atomic():
             for obj_id in ids:
-                res = service.delete({'id': obj_id})
+                res = service.delete({'id': obj_id, 'user': user})
                 if not res['success']:
                     transaction.rollback()
                     return res
@@ -296,7 +296,7 @@ class DeleteBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
                 if SocialProtectionConfig.gql_check_beneficiary_crud:
                     res = service.create_delete_task({'id': obj_id})
                 else:
-                    res = service.delete({'id': obj_id})
+                    res = service.delete({'id': obj_id, 'user': user})
                 if not res['success']:
                     transaction.rollback()
                     return res
@@ -432,7 +432,7 @@ class DeleteGroupBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
                 if SocialProtectionConfig.gql_check_group_beneficiary_crud:
                     res = service.create_delete_task({'id': obj_id})
                 else:
-                    res = service.delete({'id': obj_id})
+                    res = service.delete({'id': obj_id, 'user': user})
                 if not res['success']:
                     transaction.rollback()
                     return res

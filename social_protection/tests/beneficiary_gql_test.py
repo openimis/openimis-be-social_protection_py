@@ -33,7 +33,8 @@ class BeneficiaryGQLTest(openIMISGraphQLTestCase):
         # some test data so as to created contract properly
         cls.user_token = get_token(cls.user, cls.BaseTestContext(user=cls.user))
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
-            'code': 'SGQLTest'
+            'code': 'SGQLTest',
+            'type': "INDIVIDUAL"
         })
         cls.individual_2child = create_individual(cls.user.username)
         cls.individual_1child = create_individual(cls.user.username, payload_override={
@@ -56,6 +57,7 @@ class BeneficiaryGQLTest(openIMISGraphQLTestCase):
             }
         })
         cls.service = BeneficiaryService(cls.user)
+
         add_individual_to_benefit_plan(cls.service, cls.individual_2child, cls.benefit_plan)
         add_individual_to_benefit_plan(cls.service, cls.individual_1child, cls.benefit_plan)
         add_individual_to_benefit_plan(cls.service, cls.individual,
