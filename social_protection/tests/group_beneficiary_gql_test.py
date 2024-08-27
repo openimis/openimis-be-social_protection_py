@@ -247,3 +247,66 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
 
         beneficiary_2child = find_beneficiary_by_code(self.group_2child.code)
         self.assertTrue(beneficiary_2child['isEligible'])
+
+
+    def test_query_beneficiary_eligible_filter(self):
+        query_str = f"""
+            query {{
+              groupBeneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                status: POTENTIAL,
+                isEligible: true,
+                isDeleted: false,
+                first: 10
+              ) {{
+                totalCount
+                pageInfo {{
+                  hasNextPage
+                  hasPreviousPage
+                  startCursor
+                  endCursor
+                }}
+                edges {{
+                  node {{
+                    id
+                    jsonExt
+                    benefitPlan {{
+                      id
+                    }}
+                    group {{
+                      id
+                      code
+                    }}
+                    status
+                    isEligible
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+
+        beneficiary_data = response_data['data']['groupBeneficiary']
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+
+        eligible_beneficiary = beneficiary_data['edges'][0]['node']
+        self.assertTrue(eligible_beneficiary['isEligible'])
+        self.assertEqual(self.group_2child.code, eligible_beneficiary['group']['code'])
+
+        # flip search criteria and result should only return ineligible records
+        query_str = query_str.replace('isEligible: true', 'isEligible: false')
+
+        response = self.query(query_str,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+
+        beneficiary_data = response_data['data']['groupBeneficiary']
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+
+        eligible_beneficiary = beneficiary_data['edges'][0]['node']
+        self.assertFalse(eligible_beneficiary['isEligible'])
+        self.assertEqual(self.group_1child.code, eligible_beneficiary['group']['code'])
