@@ -76,7 +76,7 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
                 field, value_type = field.rsplit('__', 1)
             value = self.__cast_value(value, value_type)
             filter_kwargs = {f"{relation}__json_ext__{field}" if relation else f"json_ext__{field}": value}
-            query = query.filter(**filter_kwargs)
+            query = query.filter(**filter_kwargs).distinct()
         return query
 
     def __process_schema_and_build_tuple(

@@ -10,7 +10,7 @@ from graphene_django.utils.testing import GraphQLTestCase
 from django.conf import settings
 from graphql_jwt.shortcuts import get_token
 from social_protection.tests.test_helpers import create_benefit_plan,\
-        create_group_with_individual, add_group_to_benefit_plan
+        create_group_with_individual, add_group_to_benefit_plan, create_individual, add_individual_to_group
 from social_protection.services import GroupBeneficiaryService
 import json
 
@@ -35,7 +35,22 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
             'code': 'GGQLTest',
             'type': 'GROUP'
         })
-        cls.individual_2child, cls.group_2child, _ = create_group_with_individual(cls.user.username)
+        cls.individual_2child, cls.group_2child, gi = create_group_with_individual(cls.user.username)
+        child1 = create_individual(cls.user.username, payload_override={
+            'first_name': 'Child1',
+            'json_ext': {
+                'number_of_children': 0
+            }
+        })
+        child2 = create_individual(cls.user.username, payload_override={
+            'first_name': 'Child2',
+            'json_ext': {
+                'number_of_children': 0
+            }
+        })
+        add_individual_to_group(cls.user.username, child1, cls.group_2child)
+        add_individual_to_group(cls.user.username, child2, cls.group_2child)
+
         cls.individual_1child, cls.group_1child, _ = create_group_with_individual(
             cls.user.username,
             individual_override={
@@ -162,14 +177,15 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
         response_data = json.loads(response.content)
 
         beneficiary_data = response_data['data']['groupBeneficiary']
-        self.assertEqual(beneficiary_data['totalCount'], 2)
+        self.assertEqual(beneficiary_data['totalCount'], 3)
 
         returned_group_codes = list(
             e['node']['group']['code'] for e in beneficiary_data['edges']
         )
         self.assertTrue(self.group_0child.code in returned_group_codes)
         self.assertTrue(self.group_1child.code in returned_group_codes)
-        self.assertFalse(self.group_2child.code in returned_group_codes)
+        # group_2child also included because it contains individuals with < 2 children
+        self.assertTrue(self.group_2child.code in returned_group_codes)
 
         query_str = query_str.replace('__lt__', '__gte__')
 

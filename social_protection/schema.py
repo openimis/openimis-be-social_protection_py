@@ -298,7 +298,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
                     Query.object_type,
                     custom_filters,
                     query,
-                    "group",
+                    "group__groupindividual__individual",
                 )
             return query
 
@@ -323,7 +323,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
                 Query.object_type,
                 eligibility_filters,
                 query,
-                "group",
+                "group__groupindividual__individual",
             )
             eligible_group_beneficiaries = gql_optimizer.query(query_eligible, info)
             eligible_group_uuids = set(eligible_group_beneficiaries.values_list('uuid', flat=True))
