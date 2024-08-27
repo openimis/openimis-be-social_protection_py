@@ -94,6 +94,7 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
                       code
                     }}
                     status
+                    isEligible
                   }}
                 }}
               }}
@@ -114,6 +115,12 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
         self.assertTrue(self.group_1child.code in enrolled_group_codes)
         self.assertTrue(self.group_2child.code in enrolled_group_codes)
         self.assertFalse(self.group_not_enrolled.code in enrolled_group_codes)
+
+        # eligibility is status specific, so None is expected for all records without status filter
+        eligible_none = list(
+            e['node']['isEligible'] is None for e in beneficiary_data['edges']
+        )
+        self.assertTrue(all(eligible_none))
 
 
     def test_query_beneficiary_custom_filter(self):
@@ -207,6 +214,7 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
                       code
                     }}
                     status
+                    isEligible
                   }}
                 }}
               }}
@@ -228,3 +236,14 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
         self.assertTrue(self.group_2child.code in enrolled_group_codes)
         self.assertFalse(self.group_not_enrolled.code in enrolled_group_codes)
 
+        def find_beneficiary_by_code(code):
+            for edge in beneficiary_data['edges']:
+                if edge['node']['group']['code'] == code:
+                    return edge['node']
+            return None
+
+        beneficiary_1child = find_beneficiary_by_code(self.group_1child.code)
+        self.assertFalse(beneficiary_1child['isEligible'])
+
+        beneficiary_2child = find_beneficiary_by_code(self.group_2child.code)
+        self.assertTrue(beneficiary_2child['isEligible'])
