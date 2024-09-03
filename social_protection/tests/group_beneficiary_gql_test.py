@@ -26,10 +26,10 @@ class GroupBeneficiaryGQLTest(openIMISGraphQLTestCase):
 
     @classmethod
     def setUpClass(cls):
-        super().setUpClass()
+        super(GroupBeneficiaryGQLTest, cls).setUpClass()
         cls.user = User.objects.filter(username='admin', i_user__isnull=False).first()
         if not cls.user:
-            cls.user=create_test_interactive_user(username='admin')
+            cls.user = create_test_interactive_user(username='admin')
         cls.user_token = get_token(cls.user, cls.BaseTestContext(user=cls.user))
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
             'code': 'GGQLTest',
