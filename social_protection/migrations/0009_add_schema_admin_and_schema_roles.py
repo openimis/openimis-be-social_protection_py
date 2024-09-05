@@ -2,7 +2,6 @@
 
 from django.db import migrations
 
-from core.models import Role, RoleRight
 from core.utils import insert_role_right_for_system
 
 SCHEMA_ADMIN_ID = 4194304
@@ -11,16 +10,16 @@ ROLE_NAME = "Schema Admin"
 SCHEMA_ADMIN_ROLE_RIGHTS = ["171001", "171002", "171003", "171004"]
 
 
-def _get_role(role_id):
+def _get_role(role_id, Role):
     return Role.objects.filter(is_system=role_id).first()
 
 
-def _add_rights_to_role(role):
+def _add_rights_to_role(role, apps):
     for right in SCHEMA_ADMIN_ROLE_RIGHTS:
-        insert_role_right_for_system(role, right)
+        insert_role_right_for_system(role, right, apps)
 
 
-def _remove_rights_from_role(role):
+def _remove_rights_from_role(role, RoleRight):
     RoleRight.objects.filter(
         role__is_system=role,
         right_id__in=SCHEMA_ADMIN_ROLE_RIGHTS,
@@ -28,29 +27,32 @@ def _remove_rights_from_role(role):
     ).delete()
 
 
-def _create_task_triage_role():
-    role = _get_role(SCHEMA_ADMIN_ID)
+def _create_task_triage_role(Role):
+    role = _get_role(SCHEMA_ADMIN_ID, Role)
     if not role:
         task_triage = Role(is_system=SCHEMA_ADMIN_ID, name=ROLE_NAME, is_blocked=False)
         task_triage.save()
 
 
-def _delete_task_triage_role():
-    role = _get_role(SCHEMA_ADMIN_ID)
+def _delete_task_triage_role(Role):
+    role = _get_role(SCHEMA_ADMIN_ID, Role)
     if role:
         role.delete()
 
 
 def on_migration(apps, schema_editor):
-    _create_task_triage_role()
-    _add_rights_to_role(IMIS_ADMIN)
-    _add_rights_to_role(SCHEMA_ADMIN_ID)
+    Role = apps.get_model('core', 'Role')
+    _create_task_triage_role(Role)
+    _add_rights_to_role(IMIS_ADMIN, apps)
+    _add_rights_to_role(SCHEMA_ADMIN_ID, apps)
 
 
 def on_migration_reverse(apps, schema_editor):
-    _remove_rights_from_role(IMIS_ADMIN)
-    _remove_rights_from_role(SCHEMA_ADMIN_ID)
-    _delete_task_triage_role()
+    RoleRight = apps.get_model('core', 'RoleRight')
+    Role = apps.get_model('core', 'Role')
+    _remove_rights_from_role(IMIS_ADMIN, RoleRight)
+    _remove_rights_from_role(SCHEMA_ADMIN_ID, RoleRight)
+    _delete_task_triage_role(Role)
 
 
 class Migration(migrations.Migration):
