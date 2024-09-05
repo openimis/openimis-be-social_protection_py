@@ -97,13 +97,12 @@ class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
         return self.is_eligible
 
 
-class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
-    uuid = graphene.String(source='uuid')
+class GroupBeneficiaryFilter(django_filters.FilterSet):
+    is_eligible = django_filters.BooleanFilter(method='filter_is_eligible')
 
     class Meta:
         model = GroupBeneficiary
-        interfaces = (graphene.relay.Node,)
-        filter_fields = {
+        fields = {
             "id": ["exact"],
             "status": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
@@ -115,7 +114,23 @@ class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
             "is_deleted": ["exact"],
             "version": ["exact"],
         }
+
+    def filter_is_eligible(self, queryset, name, value):
+        return queryset.filter(is_eligible=value)
+
+
+class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
+    uuid = graphene.String(source='uuid')
+    is_eligible = graphene.Boolean()
+
+    class Meta:
+        model = GroupBeneficiary
+        interfaces = (graphene.relay.Node,)
+        filterset_class = GroupBeneficiaryFilter
         connection_class = ExtendedConnection
+
+    def resolve_is_eligible(self, info):
+        return self.is_eligible
 
 
 class BenefitPlanDataUploadQGLType(DjangoObjectType, JsonExtMixin):
