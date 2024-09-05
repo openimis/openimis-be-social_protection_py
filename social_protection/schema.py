@@ -277,28 +277,76 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         return gql_optimizer.query(query, info)
 
     def resolve_group_beneficiary(self, info, **kwargs):
-        filters = append_validity_filter(**kwargs)
+        def _build_filters(info, **kwargs):
+            filters = append_validity_filter(**kwargs)
 
-        client_mutation_id = kwargs.get("client_mutation_id", None)
-        if client_mutation_id:
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            client_mutation_id = kwargs.get("client_mutation_id")
+            if client_mutation_id:
+                filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
 
-        Query._check_permissions(
-            info.context.user,
-            SocialProtectionConfig.gql_beneficiary_search_perms
-        )
-        query = GroupBeneficiary.objects.filter(*filters)
-
-        custom_filters = kwargs.get("customFilters", None)
-        if custom_filters:
-            query = CustomFilterWizardStorage.build_custom_filters_queryset(
-                "individual",
-                "GroupIndividual",
-                custom_filters,
-                query,
-                "group",
+            Query._check_permissions(
+                info.context.user,
+                SocialProtectionConfig.gql_beneficiary_search_perms
             )
+            return filters
+
+        def _apply_custom_filters(query, **kwargs):
+            custom_filters = kwargs.get("customFilters")
+            if custom_filters:
+                query = CustomFilterWizardStorage.build_custom_filters_queryset(
+                    Query.module_name,
+                    Query.object_type,
+                    custom_filters,
+                    query,
+                    "group__groupindividual__individual",
+                )
+            return query
+
+        def _get_eligible_group_uuids(query, info, **kwargs):
+            status = kwargs.get("status")
+            benefit_plan_id = kwargs.get("benefit_plan__id")
+            default_results = (set(), False)  # No eligibility check was performed
+
+            if not status or not benefit_plan_id:
+                return default_results
+
+            benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).first()
+            if not benefit_plan:
+                return default_results
+
+            eligibility_filters = (benefit_plan.json_ext or {}).get('advanced_criteria', {}).get(status)
+            if not eligibility_filters:
+                return default_results
+
+            query_eligible = CustomFilterWizardStorage.build_custom_filters_queryset(
+                Query.module_name,
+                Query.object_type,
+                eligibility_filters,
+                query,
+                "group__groupindividual__individual",
+            )
+            eligible_group_beneficiaries = gql_optimizer.query(query_eligible, info)
+            eligible_group_uuids = set(eligible_group_beneficiaries.values_list('uuid', flat=True))
+            return eligible_group_uuids, True  # Eligibility check was performed
+
+        def _annotate_is_eligible(query, eligible_group_uuids, eligibility_check_performed):
+            return query.annotate(
+                is_eligible=Case(
+                    When(uuid__in=eligible_group_uuids, then=Value(True)),
+                    When(~Q(uuid__in=eligible_group_uuids) & Value(eligibility_check_performed), then=Value(False)),
+                    default=Value(None),
+                    output_field=BooleanField()
+                )
+            )
+
+        filters = _build_filters(info, **kwargs)
+        query = _apply_custom_filters(GroupBeneficiary.objects.filter(*filters), **kwargs)
+
+        eligible_group_uuids, eligibility_check_performed = _get_eligible_group_uuids(query, info, **kwargs)
+        query = _annotate_is_eligible(query, eligible_group_uuids, eligibility_check_performed)
+
         return gql_optimizer.query(query, info)
+
 
     def resolve_awaiting_beneficiary(self, info, **kwargs):
         filters = append_validity_filter(**kwargs)
