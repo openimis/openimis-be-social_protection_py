@@ -1,16 +1,20 @@
 from django.apps import apps
+from django.conf import settings
 
-from social_protection.apps import SocialProtectionConfig
+is_unit_test_env = getattr(settings, 'IS_UNIT_TEST_ENV', False)
 
 # Check if the 'opensearch_reports' app is in INSTALLED_APPS
-if 'opensearch_reports' in apps.app_configs and SocialProtectionConfig.opensearch_synch:
-    from django_opensearch_dsl import Document, fields as opensearch_fields
+if 'opensearch_reports' in apps.app_configs and not is_unit_test_env:
+    from opensearch_reports.service import BaseSyncDocument
+    from django_opensearch_dsl import fields as opensearch_fields
     from django_opensearch_dsl.registries import registry
     from social_protection.models import Beneficiary, BenefitPlan
     from individual.models import Individual
 
     @registry.register_document
-    class BeneficiaryDocument(Document):
+    class BeneficiaryDocument(BaseSyncDocument):
+        DASHBOARD_NAME = 'Beneficiary'
+
         benefit_plan = opensearch_fields.ObjectField(properties={
             'code': opensearch_fields.KeywordField(),
             'name': opensearch_fields.KeywordField(),
