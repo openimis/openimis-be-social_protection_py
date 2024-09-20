@@ -50,7 +50,6 @@ DEFAULT_CONFIG = {
     ],
     "social_protection_masking_enabled": True,
     "enable_python_workflows": True,
-    "opensearch_synch": False,
 }
 
 
@@ -91,7 +90,6 @@ class SocialProtectionConfig(AppConfig):
 
     enable_python_workflows = None
     enable_maker_checker_logic_enrollment = None
-    opensearch_synch = None
     beneficiary_mask_fields = None
     group_beneficiary_mask_fields = None
     social_protection_masking_enabled = None
