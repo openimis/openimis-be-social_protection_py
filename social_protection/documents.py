@@ -1,8 +1,6 @@
 from django.apps import apps
 from django.conf import settings
 
-from social_protection.apps import SocialProtectionConfig
-
 is_unit_test_env = getattr(settings, 'IS_UNIT_TEST_ENV', False)
 
 # Check if the 'opensearch_reports' app is in INSTALLED_APPS
