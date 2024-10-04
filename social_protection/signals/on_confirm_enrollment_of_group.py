@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from django.core.exceptions import ValidationError
 from individual.models import (
@@ -53,14 +54,19 @@ def on_confirm_enrollment_of_group(**kwargs):
             group_id__in=group_ids,
             role=GroupIndividual.Role.HEAD
         ).distinct()
+        data_source_objects = []
         for group_individual in group_individuals:
             source = IndividualDataSource(
                 upload=upload,
                 individual=group_individual.individual,
                 json_ext=group_individual.individual.json_ext,
-                validations={}
+                validations={},
+                user_created=user,
+                user_updated=user,
+                uuid=uuid.uuid4(),
             )
-            source.save(username=user.login_name)
+            data_source_objects.append(source)
+        IndividualDataSource.objects.bulk_create(data_source_objects)
         json_ext = {
             'source_name': upload_record.data_upload.source_name,
             'workflow': upload_record.workflow,
