@@ -69,6 +69,7 @@ class ItemsUploadTaskCompletionEvent:
 
 def on_task_complete_action(business_event, **kwargs):
     from social_protection.apps import SocialProtectionConfig
+    from social_protection.services import BeneficiaryImportService
 
     result = kwargs.get('result')
     if not result or not result.get('success'):
@@ -111,6 +112,10 @@ def on_task_complete_action(business_event, **kwargs):
                 new_beneficiaries.append(beneficiary)
             try:
                 Beneficiary.objects.bulk_create(new_beneficiaries)
+                BeneficiaryImportService(user).synchronize_data_for_reporting(
+                    upload_id=data['task']['json_ext']['data_upload_id'],
+                    benefit_plan=data['task']['json_ext']['benefit_plan_id']
+                )
             except ValidationError as e:
                 logger.error(f"Validation error occurred: {e}")
             return
