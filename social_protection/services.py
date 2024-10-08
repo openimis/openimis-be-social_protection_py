@@ -3,6 +3,8 @@ import json
 import logging
 import uuid
 
+import concurrent.futures
+import math
 import pandas as pd
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
@@ -232,31 +234,66 @@ class BeneficiaryImportService:
         self._synchronize_individual(upload_id)
         self._synchronize_beneficiary(benefit_plan, upload_id)
 
-    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid):
+    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid, num_workers=4):
         schema_dict = benefit_plan.beneficiary_data_schema
         properties = schema_dict.get("properties", {})
+
+        calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
+        calculation = get_calculation_object(calculation_uuid)
+
+        unique_fields = [field for field, props in properties.items() if "uniqueness" in props]
+        unique_validations = {}
+        if unique_fields:
+            unique_validations = {
+                field: dataframe[field].duplicated(keep=False)
+                for field in unique_fields
+            }
+
+        chunk_size = math.ceil(len(dataframe) / num_workers)
+        data_chunks = [dataframe[i:i + chunk_size] for i in range(0, dataframe.shape[0], chunk_size)]
+
         validated_dataframe = []
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+            futures = [executor.submit(
+                self.process_chunk,
+                chunk,
+                properties,
+                unique_validations,
+                calculation,
+                calculation_uuid
+            ) for chunk in data_chunks]
 
-        def validate_row(row):
-            field_validation = {'row': row.to_dict(), 'validations': {}}
-            for field, field_properties in properties.items():
-                if "validationCalculation" in field_properties:
-                    if field in row:
-                        field_validation['validations'][f'{field}'] = self._handle_validation_calculation(
-                            row, field, field_properties
-                        )
-                if "uniqueness" in field_properties:
-                    if field in row:
-                        field_validation['validations'][f'{field}_uniqueness'] = self._handle_uniqueness(
-                            row, field, field_properties, benefit_plan, dataframe
-                        )
-            validated_dataframe.append(field_validation)
-            self.__save_validation_error_in_data_source(row, field_validation)
-            return row
+            for future in concurrent.futures.as_completed(futures):
+                validated_dataframe.extend(future.result())
 
-        dataframe.apply(validate_row, axis='columns')
+        self.save_validation_error_in_data_source_bulk(validated_dataframe)
         invalid_items = fetch_summary_of_broken_items(upload_id)
         return validated_dataframe, invalid_items
+
+    @staticmethod
+    def process_chunk(chunk, properties, unique_validations, calculation, calculation_uuid):
+        validated_dataframe = []
+        for _, row in chunk.iterrows():
+            field_validation = {'row': row.to_dict(), 'validations': {}}
+            for field, field_properties in properties.items():
+
+                # Validation Calculation
+                if "validationCalculation" in field_properties and field in row:
+                    validation_name = field_properties["validationCalculation"]["name"]
+                    field_validation['validations'][field] = calculation.calculate_if_active_for_object(
+                        validation_name,
+                        calculation_uuid,
+                        field_name=field,
+                        field_value=row[field]
+                    )
+
+                # Uniqueness Check
+                if "uniqueness" in field_properties and field in row:
+                    field_validation['validations'][f'{field}_uniqueness'] = not unique_validations[field].loc[row.name]
+
+            validated_dataframe.append(field_validation)
+
+        return validated_dataframe
 
     def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
         unique_class_validation = SocialProtectionConfig.unique_class_validation
@@ -304,7 +341,20 @@ class BeneficiaryImportService:
         return self.import_loaders[import_file.content_type](import_file)
 
     def _save_data_source(self, dataframe: pd.DataFrame, upload: IndividualDataSourceUpload):
-        dataframe.apply(self._save_row, axis='columns', args=(upload,))
+        data_source_objects = []
+
+        for _, row in dataframe.iterrows():
+            ds = IndividualDataSource(
+                upload=upload,
+                json_ext=json.loads(row.to_json()),
+                validations={},
+                user_created=self.user,
+                user_updated=self.user,
+                uuid=uuid.uuid4()
+            )
+            data_source_objects.append(ds)
+
+        IndividualDataSource.objects.bulk_create(data_source_objects)
 
     def _save_row(self, row, upload):
         ds = IndividualDataSource(upload=upload, json_ext=json.loads(row.to_json()), validations={})
@@ -339,18 +389,29 @@ class BeneficiaryImportService:
             upload.save(username=self.user.login_name)
             return upload
 
-    def __save_validation_error_in_data_source(self, row, field_validation):
-        error_fields = []
-        for key, value in field_validation['validations'].items():
-            if not value['success']:
-                error_fields.append({
-                    "field_name": value['field_name'],
-                    "note": value['note']
-                })
-        individual_data_source = IndividualDataSource.objects.get(id=row['id'])
-        validation_column = {'validation_errors': error_fields}
-        individual_data_source.validations = validation_column
-        individual_data_source.save(username=self.user.username)
+    def save_validation_error_in_data_source_bulk(self, validated_dataframe):
+        data_sources_to_update = []
+
+        for field_validation in validated_dataframe:
+            row = field_validation['row']
+            error_fields = []
+
+            for key, value in field_validation['validations'].items():
+                if not value.get('success', False):
+                    error_fields.append({
+                        "field_name": value.get('field_name'),
+                        "note": value.get('note')
+                    })
+
+            data_sources_to_update.append(
+                IndividualDataSource(
+                    id=row['id'],
+                    validations={'validation_errors': error_fields}
+                )
+            )
+
+        if data_sources_to_update:
+            IndividualDataSource.objects.bulk_update(data_sources_to_update, ['validations'])
 
     def _synchronize_individual(self, upload_id):
         individuals_to_update = Individual.objects.filter(
