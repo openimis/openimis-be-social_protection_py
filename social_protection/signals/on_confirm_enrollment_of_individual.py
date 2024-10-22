@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from django.core.exceptions import ValidationError
 from individual.models import (
@@ -45,14 +46,19 @@ def on_confirm_enrollment_of_individual(**kwargs):
             workflow="Enrollment"
         )
         upload_record.save(username=user.username)
+        data_source_objects = []
         for individual in individuals_to_upload:
             source = IndividualDataSource(
+                uuid=uuid.uuid4(),
+                user_created=user,
+                user_updated=user,
                 upload=upload,
                 individual=individual,
                 json_ext=individual.json_ext,
                 validations={}
             )
-            source.save(username=user.login_name)
+            data_source_objects.append(source)
+        IndividualDataSource.objects.bulk_create(data_source_objects)
         json_ext = {
             'source_name': upload_record.data_upload.source_name,
             'workflow': upload_record.workflow,
@@ -70,15 +76,20 @@ def on_confirm_enrollment_of_individual(**kwargs):
             'json_ext': json_ext
         })
     else:
+        new_beneficiaries = []
         for individual in individuals_to_upload:
             # Create a new Beneficiary instance
             beneficiary = Beneficiary(
                 individual=individual,
                 benefit_plan_id=benefit_plan_id,
                 status=status,
-                json_ext=individual.json_ext
+                json_ext=individual.json_ext,
+                user_created=user,
+                user_updated=user,
+                uuid=uuid.uuid4(),
             )
-            try:
-                beneficiary.save(username=user.username)
-            except ValidationError as e:
-                logger.error(f"Validation error occurred: {e}")
+            new_beneficiaries.append(beneficiary)
+        try:
+            Beneficiary.objects.bulk_create(new_beneficiaries)
+        except ValidationError as e:
+            logger.error(f"Validation error occurred: {e}")

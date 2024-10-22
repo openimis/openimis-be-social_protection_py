@@ -1,4 +1,5 @@
 import logging
+import uuid
 from django.core.exceptions import ValidationError
 from typing import List
 
@@ -68,6 +69,7 @@ class ItemsUploadTaskCompletionEvent:
 
 def on_task_complete_action(business_event, **kwargs):
     from social_protection.apps import SocialProtectionConfig
+    from social_protection.services import BeneficiaryImportService
 
     result = kwargs.get('result')
     if not result or not result.get('success'):
@@ -96,37 +98,49 @@ def on_task_complete_action(business_event, **kwargs):
                 individualdatasource__upload_id=data['task']['json_ext']['data_upload_id']
             )
             user = User.objects.get(id=data['user']['id'])
+            new_beneficiaries = []
             for individual in individuals_to_enroll:
-                # Create a new Beneficiary instance
                 beneficiary = Beneficiary(
                     individual=individual,
                     benefit_plan_id=data['task']['json_ext']['benefit_plan_id'],
                     status=data['task']['json_ext']['beneficiary_status'],
-                    json_ext=individual.json_ext
+                    json_ext=individual.json_ext,
+                    user_created=user,
+                    user_updated=user,
+                    uuid=uuid.uuid4(),
                 )
-                try:
-                    beneficiary.save(username=user.username)
-                except ValidationError as e:
-                    logger.error(f"Validation error occurred: {e}")
+                new_beneficiaries.append(beneficiary)
+            try:
+                Beneficiary.objects.bulk_create(new_beneficiaries)
+                BeneficiaryImportService(user).synchronize_data_for_reporting(
+                    upload_id=data['task']['json_ext']['data_upload_id'],
+                    benefit_plan=data['task']['json_ext']['benefit_plan_id']
+                )
+            except ValidationError as e:
+                logger.error(f"Validation error occurred: {e}")
             return
         elif business_event == SocialProtectionConfig.validation_group_enrollment:
             head_groups_to_enroll = Individual.objects.filter(
                 individualdatasource__upload_id=data['task']['json_ext']['data_upload_id']
             )
             user = User.objects.get(id=data['user']['id'])
+            new_group_beneficiaries = []
             for head_individual in head_groups_to_enroll:
-                # Create a new Beneficiary instance
                 group_individual_head = GroupIndividual.objects.filter(individual=head_individual).first()
                 group_beneficiary = GroupBeneficiary(
                     group=group_individual_head.group,
                     benefit_plan_id=data['task']['json_ext']['benefit_plan_id'],
                     status=data['task']['json_ext']['beneficiary_status'],
-                    json_ext=head_individual.json_ext
+                    json_ext=head_individual.json_ext,
+                    user_created=user,
+                    user_updated=user,
+                    uuid=uuid.uuid4(),
                 )
-                try:
-                    group_beneficiary.save(username=user.username)
-                except ValidationError as e:
-                    logger.error(f"Validation error occurred: {e}")
+                new_group_beneficiaries.append(group_beneficiary)
+            try:
+                GroupBeneficiary.objects.bulk_create(new_group_beneficiaries)
+            except ValidationError as e:
+                logger.error(f"Validation error occurred: {e}")
             return
         else:
             raise ValueError(f"Business event {business_event} doesn't have assigned workflow.")
