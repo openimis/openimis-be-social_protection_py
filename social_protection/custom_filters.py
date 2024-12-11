@@ -41,6 +41,7 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         :return: A list of named tuples representing the definition of how to create filters.
         :rtype: List[namedtuple]
         """
+        print('xxx')
         benefit_plan_id = kwargs.get('uuid', None)
         additional_params = kwargs.get('additional_params', None)
         if benefit_plan_id:
