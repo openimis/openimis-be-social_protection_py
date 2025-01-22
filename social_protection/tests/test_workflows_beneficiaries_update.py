@@ -189,7 +189,6 @@ class ProcessUpdateBeneficiariesWorkflowTest(TestCase):
 
         upload = IndividualDataSourceUpload.objects.get(id=self.upload_uuid)
 
-        # print(vars(upload))
         self.assertEqual(upload.status, "SUCCESS", upload.error)
         self.assertEqual(upload.error, {})
 
