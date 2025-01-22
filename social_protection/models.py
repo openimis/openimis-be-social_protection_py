@@ -8,7 +8,6 @@ from django.core.exceptions import ValidationError
 from core import models as core_models
 from core.models import UUIDModel, ObjectMutation, MutationLog
 from individual.models import Individual, Group, IndividualDataSourceUpload
-from location.models import Location, LocationManager
 
 
 class BeneficiaryStatus(models.TextChoices):
@@ -65,29 +64,12 @@ class Beneficiary(core_models.HistoryBusinessModel):
         if queryset is None:
             queryset = cls.objects.all()
 
-        if not settings.ROW_SECURITY:
-            return queryset
-
-        if user.is_anonymous:
-            return queryset.filter(id=-1)
-
-        if not user.is_imis_admin:
-            user_districts_match_individual = LocationManager().build_user_location_filter_query(
-                user._u, prefix='individual__location'
-            )
-            individual_has_group = models.Q(("individual__groupindividuals__group__isnull", False))
-            user_districts_match_individual_group = LocationManager().build_user_location_filter_query(
-                user._u,
-                prefix='individual__groupindividuals__group__location'
-            )
-            return queryset.filter(
-                models.Q(
-                    user_districts_match_individual
-                    | (individual_has_group & user_districts_match_individual_group)
-                )
-            )
-
-        return queryset
+        individuals = Individual.objects.filter(
+            id__in=queryset.values('individual_id')
+        ).distinct()
+    
+        individual_queryset = Individual.get_queryset(individuals, user)
+        return queryset.filter(individual__in=individual_queryset)
 
 
 class BenefitPlanDataUploadRecords(core_models.HistoryModel):
@@ -117,19 +99,12 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
         if queryset is None:
             queryset = cls.objects.all()
 
-        if not settings.ROW_SECURITY:
-            return queryset
-
-        if user.is_anonymous:
-            return queryset.filter(id=-1)
-
-        if not user.is_imis_admin:
-            return queryset.filter(
-                LocationManager().build_user_location_filter_query(
-                    user._u, prefix='group__location'
-                )
-            )
-        return queryset
+        groups = Group.objects.filter(
+            id__in=queryset.values('group_id')
+        ).distinct()
+    
+        group_queryset = Group.get_queryset(groups, user)
+        return queryset.filter(group__in=group_queryset)
 
 
 class JSONUpdate(Func):
