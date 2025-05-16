@@ -29,6 +29,7 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         # Required dependencies
         cls.benefit_plan = find_or_create_benefit_plan({"name": "TESTPLAN"}, username)
         cls.activity = find_or_create_activity("Community Outreach", username)
+        cls.another_activity = find_or_create_activity("Tree Planting", username)
         cls.location = create_test_village()
 
         cls.project_1 = Project(
@@ -200,3 +201,132 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertEqual(response.status_code, 400)
         content = json.loads(response.content)
         self.assertIn("errors", content)
+
+
+    def test_update_project_mutation_success(self):
+        mutation = """
+        mutation UpdateProject($input: UpdateProjectMutationInput!) {
+          updateProject(input: $input) {
+            clientMutationId
+            internalId
+          }
+        }
+        """
+
+        variables = {
+            "input": {
+                "id": str(self.project_1.id),
+                "name": "Updated Village Health Project A",
+                "targetBeneficiaries": 120,
+                "workingDays": 130,
+                "activityId": str(self.another_activity.id),
+                "clientMutationId": "xyz789"
+            }
+        }
+
+        response = self.query(
+            mutation,
+            variables=variables,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['updateProject']
+        self.assert_mutation_success(data['internalId'], self.user_token)
+
+        # Verify project is updated in DB
+        updated_project = Project.objects.get(id=self.project_1.id)
+        self.assertEqual(updated_project.name, "Updated Village Health Project A")
+        self.assertEqual(updated_project.target_beneficiaries, 120)
+        self.assertEqual(updated_project.working_days, 130)
+        self.assertEqual(updated_project.activity.id, self.another_activity.id)
+
+    def test_update_project_mutation_requires_authentication(self):
+        mutation = """
+        mutation {
+          updateProject(input: {
+            id: "%s",
+            name: "Unauthorized Update Project",
+            targetBeneficiaries: 100,
+            workingDays: 90
+          }) {
+            clientMutationId
+            internalId
+          }
+        }
+        """ % self.project_1.id
+
+        response = self.query(mutation)
+        self.assertResponseNoErrors(response)
+
+        data = json.loads(response.content)['data']['updateProject']
+        self.assert_mutation_error(
+            data['internalId'], self.user_token, "authentication_required"
+        )
+
+        response = self.query(
+            mutation,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+
+        self.assertResponseNoErrors(response)
+        content = json.loads(response.content)
+        data = content['data']['updateProject']
+        self.assert_mutation_error(
+            data['internalId'], self.user_token, "authentication_required"
+        )
+
+    def test_delete_project_mutation_success(self):
+        mutation = """
+        mutation DeleteProject($input: DeleteProjectMutationInput!) {
+          deleteProject(input: $input) {
+            clientMutationId
+            internalId
+          }
+        }
+        """
+
+        variables = {
+            "input": {
+                "ids": [str(self.project_1.id), str(self.project_2.id)],
+                "clientMutationId": "delete123"
+            }
+        }
+
+        response = self.query(
+            mutation,
+            variables=variables,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['deleteProject']
+        self.assert_mutation_success(data['internalId'], self.user_token)
+
+    def test_delete_project_mutation_requires_authentication(self):
+        mutation = """
+        mutation {
+          deleteProject(input: {
+            ids: ["%s", "%s"]
+          }) {
+            clientMutationId
+            internalId
+          }
+        }
+        """ % (self.project_1.id, self.project_2.id)
+
+        response = self.query(mutation)
+        self.assertResponseNoErrors(response)
+
+        data = json.loads(response.content)['data']['deleteProject']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        response = self.query(
+            mutation,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['deleteProject']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
