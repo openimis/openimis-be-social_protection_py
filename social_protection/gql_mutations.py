@@ -563,3 +563,37 @@ class DeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
+
+
+class UndoDeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+    _mutation_class = "UndoDeleteProjectMutation"
+    _mutation_module = "social_protection"
+    _model = Project
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if isinstance(user, AnonymousUser) or not user.has_perms(
+            SocialProtectionConfig.gql_project_delete_perms
+        ):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop("client_mutation_id")
+        if "client_mutation_label" in data:
+            data.pop("client_mutation_label")
+
+        service = ProjectService(user)
+        ids = data.get("ids")
+        if not ids:
+            return {"success": False, "message": "No IDs to undo delete", "details": ""}
+
+        with transaction.atomic():
+            for obj_id in ids:
+                res = service.undo_delete({"id": obj_id})
+                if not res["success"]:
+                    return res
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)

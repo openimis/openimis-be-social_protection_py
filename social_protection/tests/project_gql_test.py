@@ -10,6 +10,7 @@ from social_protection.tests.test_helpers import (
 from social_protection.models import Project
 from location.test_helpers import create_test_village
 from django.contrib.auth import get_user_model
+import uuid
 
 
 class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
@@ -52,11 +53,22 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         )
         cls.project_2.save(username=username)
 
+        cls.deleted_project = Project(
+            name="Deleted Project",
+            benefit_plan=cls.benefit_plan,
+            activity=cls.activity,
+            location=cls.location,
+            target_beneficiaries=150,
+            working_days=90,
+            is_deleted=True,
+        )
+        cls.deleted_project.save(username=username)
+
     def test_project_query(self):
         response = self.query(
             """
             query {
-              project(first: 10) {
+              project(first: 10, isDeleted: false) {
                 totalCount
                 edges {
                   node {
@@ -329,4 +341,88 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertResponseNoErrors(response)
         data = json.loads(response.content)['data']['deleteProject']
         self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+    def test_undo_delete_project_mutation_success(self):
+        undo_mutation = """
+        mutation UndoDeleteProject($input: UndoDeleteProjectMutationInput!) {
+          undoDeleteProject(input: $input) {
+            clientMutationId
+            internalId
+          }
+        }
+        """
+
+        # Undo the delete for the same projects
+        undo_variables = {
+            "input": {
+                "ids": [str(self.deleted_project.id)],
+                "clientMutationId": "undo123"
+            }
+        }
+
+        response = self.query(
+            undo_mutation,
+            variables=undo_variables,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['undoDeleteProject']
+        self.assert_mutation_success(data['internalId'], self.user_token)
+
+    def test_undo_delete_project_mutation_requires_authentication(self):
+        undo_mutation = """
+        mutation {
+          undoDeleteProject(input: {
+            ids: ["%s"]
+          }) {
+            clientMutationId
+            internalId
+          }
+        }
+        """ % (self.deleted_project.id)
+
+        # Test for unauthenticated user
+        response = self.query(undo_mutation)
+        self.assertResponseNoErrors(response)
+
+        data = json.loads(response.content)['data']['undoDeleteProject']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        # Test for user without permission (test_officer)
+        response = self.query(
+            undo_mutation,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['undoDeleteProject']
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'authentication_required')
+
+    def test_undo_delete_project_mutation_invalid_ids(self):
+        undo_mutation = """
+        mutation UndoDeleteProject($input: UndoDeleteProjectMutationInput!) {
+          undoDeleteProject(input: $input) {
+            clientMutationId
+            internalId
+          }
+        }
+        """
+
+        undo_variables = {
+            "input": {
+                "ids": [str(uuid.uuid4())],
+                "clientMutationId": "undo123"
+            }
+        }
+
+        response = self.query(
+            undo_mutation,
+            variables=undo_variables,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['undoDeleteProject']
+        self.assert_mutation_error(data['internalId'], self.user_token, "does not exist")
 

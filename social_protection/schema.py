@@ -24,6 +24,7 @@ from social_protection.gql_mutations import (
     CreateProjectMutation,
     UpdateProjectMutation,
     DeleteProjectMutation,
+    UndoDeleteProjectMutation,
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
@@ -553,3 +554,5 @@ class Mutation(graphene.ObjectType):
     create_project = CreateProjectMutation.Field()
     update_project = UpdateProjectMutation.Field()
     delete_project = DeleteProjectMutation.Field()
+    undo_delete_project = UndoDeleteProjectMutation.Field()
+
