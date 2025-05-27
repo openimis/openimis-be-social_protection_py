@@ -31,7 +31,8 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         cls.benefit_plan = find_or_create_benefit_plan({"name": "TESTPLAN"}, username)
         cls.activity = find_or_create_activity("Community Outreach", username)
         cls.another_activity = find_or_create_activity("Tree Planting", username)
-        cls.location = create_test_village()
+        cls.location = create_test_village({'code': 'ProTV1'})
+        cls.another_location = create_test_village({'code': 'ProTV2'})
 
         cls.project_1 = Project(
             name="Village Health Project A",
@@ -47,7 +48,7 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
             name="Village Health Project B",
             benefit_plan=cls.benefit_plan,
             activity=cls.activity,
-            location=cls.location,
+            location=cls.another_location,
             target_beneficiaries=150,
             working_days=90,
         )
@@ -123,6 +124,39 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         )
         content = json.loads(response.content)
         self.assertEqual(content['errors'][0]['message'], 'Unauthorized')
+
+    def test_project_query_with_location_filter(self):
+        query = """
+            query($parentLocation: String!) {
+              project(parentLocation: $parentLocation, isDeleted: false, first: 10) {
+                totalCount
+                edges {
+                  node {
+                    id
+                    name
+                  }
+                }
+              }
+            }
+        """
+        variables = {
+            "parentLocation": str(self.location.uuid)
+        }
+
+        response = self.query(
+            query,
+            variables=variables,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+
+        content = json.loads(response.content)
+        data = content["data"]["project"]
+
+        self.assertEqual(data["totalCount"], 1)
+        returned_names = [edge["node"]["name"] for edge in data["edges"]]
+        self.assertIn("Village Health Project A", returned_names)
+        self.assertNotIn("Village Health Project B", returned_names)
 
     def test_create_project_mutation_success(self):
         mutation = """
