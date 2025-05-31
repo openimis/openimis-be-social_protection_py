@@ -266,6 +266,7 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
                 "targetBeneficiaries": 120,
                 "workingDays": 130,
                 "activityId": str(self.another_activity.id),
+                "locationId": str(self.another_location.uuid),
                 "clientMutationId": "xyz789"
             }
         }
@@ -286,6 +287,7 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertEqual(updated_project.target_beneficiaries, 120)
         self.assertEqual(updated_project.working_days, 130)
         self.assertEqual(updated_project.activity.id, self.another_activity.id)
+        self.assertEqual(updated_project.location.id, self.another_location.id)
 
     def test_update_project_mutation_requires_authentication(self):
         mutation = """

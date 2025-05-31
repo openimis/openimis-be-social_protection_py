@@ -519,7 +519,7 @@ class UpdateProjectMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
             data["benefit_plan"] = BenefitPlan.objects.get(id=data.pop("benefit_plan_id"))
         if 'activity_id' in data:
             data["activity"] = Activity.objects.get(id=data.pop("activity_id"))
-        if 'localtion_id' in data:
+        if 'location_id' in data:
             data["location"] = Location.objects.get(uuid=data.pop("location_id"))
 
         service = ProjectService(user)
