@@ -4,6 +4,7 @@ from django.db import models
 from django.db.models import Func
 from django.utils.translation import gettext as _
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 from core import models as core_models
 from core.models import UUIDModel, ObjectMutation, MutationLog
@@ -114,6 +115,84 @@ class Beneficiary(core_models.HistoryBusinessModel):
     
         individual_queryset = Individual.get_queryset(individuals, user)
         return queryset.filter(individual__in=individual_queryset)
+
+
+class AbstractProjectTimeEntry(core_models.HistoryBusinessModel):
+    """
+    Base model for recording daily percent completion for beneficiaries in projects.
+    Subclasses must implement `_get_beneficiary_instance()`.
+    """
+    # Sequential workday number within the project (1..working_days).
+    day_number = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)])
+
+    # Percentage of work completed for this day (0–100).
+    percent_complete = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+
+    class Meta:
+        abstract = True
+
+    def _get_beneficiary_instance(self):
+        """
+        Subclasses must override this to return the correct beneficiary object
+        (either Beneficiary or GroupBeneficiary).
+        """
+        raise NotImplementedError("_get_beneficiary_instance() must be implemented in subclass")
+
+    def clean(self):
+        beneficiary = self._get_beneficiary_instance()
+        project = getattr(beneficiary, "project", None)
+
+        if not project:
+            raise ValidationError(
+                _("Beneficiary must be assigned to a project before recording time entries.")
+            )
+
+        if self.day_number > project.working_days:
+            raise ValidationError(
+                _("Day number must be between 1 and %(working_days)s.") % {"working_days": project.working_days}
+            )
+
+        super().clean()
+
+    def __str__(self):
+        beneficiary = self._get_beneficiary_instance()
+        return f"{beneficiary} - Day {self.day_number}: {self.percent_complete}%"
+
+
+class BeneficiaryProjectTimeEntry(AbstractProjectTimeEntry):
+    beneficiary = models.ForeignKey(
+        'Beneficiary',
+        models.DO_NOTHING,
+        related_name='project_time_entries',
+        null=False,
+    )
+
+    class Meta:
+        unique_together = ('beneficiary', 'day_number')
+        verbose_name = _("Beneficiary Project Time Entry")
+        verbose_name_plural = _("Beneficiary Project Time Entries")
+
+    def _get_beneficiary_instance(self):
+        return self.beneficiary
+
+
+class GroupBeneficiaryProjectTimeEntry(AbstractProjectTimeEntry):
+    group_beneficiary = models.ForeignKey(
+        'GroupBeneficiary',
+        models.DO_NOTHING,
+        related_name='project_time_entries',
+        null=False,
+    )
+
+    class Meta:
+        unique_together = ('group_beneficiary', 'day_number')
+        verbose_name = _("Group Beneficiary Project Time Entry")
+        verbose_name_plural = _("Group Beneficiary Project Time Entries")
+
+    def _get_beneficiary_instance(self):
+        return self.group_beneficiary
 
 
 class BenefitPlanDataUploadRecords(core_models.HistoryModel):

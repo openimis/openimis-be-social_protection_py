@@ -48,3 +48,28 @@ msgstr "Could not determine file type"
 
 msgid "Invalid MIME type:"
 msgstr "Invalid MIME type:"
+
+#: models.py
+msgid "Beneficiary must be assigned to a project before recording time entries."
+msgstr "Beneficiary must be assigned to a project before recording time entries."
+
+#: models.py
+msgid "Day number must be between 1 and %(working_days)s."
+msgstr "Day number must be between 1 and %(working_days)s."
+
+#: models.py
+msgid "Beneficiary Project Time Entry"
+msgstr "Beneficiary Project Time Entry"
+
+#: models.py
+msgid "Beneficiary Project Time Entries"
+msgstr "Beneficiary Project Time Entries"
+
+#: models.py
+msgid "Group Beneficiary Project Time Entry"
+msgstr "Group Beneficiary Project Time Entry"
+
+#: models.py
+msgid "Group Beneficiary Project Time Entries"
+msgstr "Group Beneficiary Project Time Entries"
+

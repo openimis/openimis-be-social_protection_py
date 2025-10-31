@@ -16,6 +16,7 @@ from social_protection.tests.test_helpers import (
     add_individual_to_benefit_plan,
     create_project,
 )
+from social_protection.models import BeneficiaryProjectTimeEntry, Beneficiary
 from social_protection.services import BeneficiaryService
 from location.test_helpers import create_test_village
 import json
@@ -697,3 +698,75 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertIn(self.individual_2child.first_name, returned_names)  # already enrolled in this project
         self.assertIn(self.individual.first_name, returned_names)         # not enrolled in any project
         self.assertNotIn(self.individual_1child.first_name, returned_names)  # enrolled in a different project
+
+    def test_query_beneficiary_project_time_entries(self):
+        project = create_project(
+            'ProgressTrackingProject',
+            self.benefit_plan,
+            self.user.username,
+            allows_multiple_enrollments=True,
+        )
+        self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=project)
+
+        beneficiary = project.beneficiaries.first()
+        BeneficiaryProjectTimeEntry(
+            beneficiary=beneficiary, day_number=1, percent_complete=25
+        ).save(username=self.user.username)
+        BeneficiaryProjectTimeEntry(
+            beneficiary=beneficiary, day_number=2, percent_complete=80
+        ).save(username=self.user.username)
+        BeneficiaryProjectTimeEntry(
+            beneficiary=beneficiary, day_number=3, percent_complete=100
+        ).save(username=self.user.username)
+
+        query_str = f"""
+        query {{
+          beneficiary(
+            project_Id: "{project.uuid}",
+            isDeleted: false,
+            first: 10
+          ) {{
+            totalCount
+            edges {{
+              node {{
+                individual {{
+                  firstName
+                }}
+                project {{
+                  id
+                  name
+                }}
+                projectTimeEntries {{
+                  id
+                  dayNumber
+                  percentComplete
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+        beneficiary_data = response_data['data']['beneficiary']
+
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+        node = beneficiary_data['edges'][0]['node']
+
+        # Verify basic beneficiary info
+        self.assertEqual(node['individual']['firstName'], self.individual.first_name)
+        self.assertEqual(node['project']['name'], project.name)
+
+        # Verify projectTimeEntries
+        time_entries = node['projectTimeEntries']
+        self.assertEqual(len(time_entries), 3)
+
+        # Check order and values
+        sorted_entries = sorted(time_entries, key=lambda e: e['dayNumber'])
+        self.assertEqual([e['dayNumber'] for e in sorted_entries], [1, 2, 3])
+        self.assertEqual([e['percentComplete'] for e in sorted_entries], [25, 80, 100])

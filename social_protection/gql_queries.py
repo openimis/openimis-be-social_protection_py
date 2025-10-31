@@ -3,6 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from graphene import ObjectType
 from graphene_django import DjangoObjectType
+import graphene_django_optimizer as gql_optimizer
 import django_filters
 from graphene_django.filter import DjangoFilterConnectionField
 
@@ -15,7 +16,7 @@ from location.models import Location
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     Beneficiary, BenefitPlan, GroupBeneficiary, BenefitPlanDataUploadRecords,
-    Activity, Project,
+    Activity, Project, BeneficiaryProjectTimeEntry, GroupBeneficiaryProjectTimeEntry,
 )
 
 
@@ -66,6 +67,19 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
 
     def resolve_has_payment_plans(self, info):
         return PaymentPlan.objects.filter(benefit_plan_id=self.id).exists()
+
+
+class BeneficiaryProjectTimeEntryGQLType(DjangoObjectType):
+    class Meta:
+        model = BeneficiaryProjectTimeEntry
+        fields = ("id", "day_number", "percent_complete")
+        interfaces = (graphene.relay.Node,)
+
+class GroupBeneficiaryProjectTimeEntryGQLType(DjangoObjectType):
+    class Meta:
+        model = GroupBeneficiaryProjectTimeEntry
+        fields = ("id", "day_number", "percent_complete")
+        interfaces = (graphene.relay.Node,)
 
 
 class BeneficiarySharedFilterMixin:
@@ -177,6 +191,7 @@ class BeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMixin):
 class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
     is_eligible = graphene.Boolean()
+    project_time_entries = graphene.List(BeneficiaryProjectTimeEntryGQLType)
 
     class Meta:
         model = Beneficiary
@@ -186,6 +201,12 @@ class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
 
     def resolve_is_eligible(self, info):
         return self.is_eligible
+
+    def resolve_project_time_entries(self, info, **kwargs):
+        if not self.project_id:
+            return []
+        qs = BeneficiaryProjectTimeEntry.objects.filter(beneficiary=self)
+        return gql_optimizer.query(qs, info)
 
 
 class GroupBeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMixin):
@@ -243,6 +264,7 @@ class GroupBeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMi
 class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
     is_eligible = graphene.Boolean()
+    project_time_entries = graphene.List(GroupBeneficiaryProjectTimeEntryGQLType)
 
     class Meta:
         model = GroupBeneficiary
@@ -252,6 +274,12 @@ class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
 
     def resolve_is_eligible(self, info):
         return self.is_eligible
+
+    def resolve_project_time_entries(self, info, **kwargs):
+        if not self.project_id:
+            return []
+        qs = GroupBeneficiaryProjectTimeEntry.objects.filter(group_beneficiary=self)
+        return gql_optimizer.query(qs, info)
 
 
 class BenefitPlanDataUploadQGLType(DjangoObjectType, JsonExtMixin):

@@ -19,6 +19,7 @@ from social_protection.tests.test_helpers import (
     create_project,
 )
 from social_protection.services import GroupBeneficiaryService
+from social_protection.models import GroupBeneficiaryProjectTimeEntry
 from location.test_helpers import create_test_village
 import json
 
@@ -632,3 +633,82 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertIn(self.group_2child.code, returned_codes)
         self.assertIn(self.group_0child.code, returned_codes)
         self.assertNotIn(self.group_1child.code, returned_codes)
+
+    def test_query_group_beneficiary_project_time_entries(self):
+        project = create_project(
+            'GroupProgressTrackingProject',
+            self.benefit_plan,
+            self.user.username,
+            allows_multiple_enrollments=True,
+        )
+        # Assign the ACTIVE group beneficiary to this project
+        self.group_0child.groupbeneficiary_set.filter(
+            benefit_plan=self.benefit_plan
+        ).update(project=project)
+
+        group_beneficiary = project.group_beneficiaries.first()
+
+        # Create time entries
+        GroupBeneficiaryProjectTimeEntry(
+            group_beneficiary=group_beneficiary, day_number=1, percent_complete=30
+        ).save(username=self.user.username)
+        GroupBeneficiaryProjectTimeEntry(
+            group_beneficiary=group_beneficiary, day_number=2, percent_complete=60
+        ).save(username=self.user.username)
+        GroupBeneficiaryProjectTimeEntry(
+            group_beneficiary=group_beneficiary, day_number=3, percent_complete=90
+        ).save(username=self.user.username)
+
+        # Query with nested projectTimeEntries
+        query_str = f"""
+        query {{
+          groupBeneficiary(
+            project_Id: "{project.uuid}",
+            isDeleted: false,
+            first: 10
+          ) {{
+            totalCount
+            edges {{
+              node {{
+                group {{
+                  code
+                }}
+                project {{
+                  id
+                  name
+                }}
+                projectTimeEntries {{
+                  id
+                  dayNumber
+                  percentComplete
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+        beneficiary_data = response_data['data']['groupBeneficiary']
+
+        # Verify one group beneficiary
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+        node = beneficiary_data['edges'][0]['node']
+
+        # Verify group + project
+        self.assertEqual(node['group']['code'], self.group_0child.code)
+        self.assertEqual(node['project']['name'], project.name)
+
+        # Verify projectTimeEntries
+        time_entries = node['projectTimeEntries']
+        self.assertEqual(len(time_entries), 3)
+
+        # Check order and values
+        sorted_entries = sorted(time_entries, key=lambda e: e['dayNumber'])
+        self.assertEqual([e['dayNumber'] for e in sorted_entries], [1, 2, 3])
+        self.assertEqual([e['percentComplete'] for e in sorted_entries], [30, 60, 90])
