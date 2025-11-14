@@ -5,11 +5,13 @@ import uuid
 
 import math
 import pandas as pd
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
 from django.db import models
 from django.db.models import Q, Value, Func, F
 from django.db.models.functions import Concat
+from django.utils.translation import gettext as _
 from pandas import DataFrame
 
 from calculation.services import get_calculation_object
@@ -24,6 +26,8 @@ from social_protection.models import (
     GroupBeneficiary,
     BeneficiaryStatus,
     Project,
+    BeneficiaryProjectTimeEntry,
+    GroupBeneficiaryProjectTimeEntry,
 )
 
 from social_protection.utils import load_dataframe, fetch_summary_of_valid_items, fetch_summary_of_broken_items
@@ -160,6 +164,69 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
         serialized_data = crud_business_data_builder(data, serialize)
         return serialized_data
 
+    @register_service_signal('beneficiary_service.bulk_update_time_entries')
+    def bulk_update_time_entries(self, obj_data):
+        try:
+            project_id = obj_data.get('project_id')
+            time_entries_data = obj_data.get('time_entries', [])
+
+            if not time_entries_data:
+                return {
+                    'success': True,
+                    'message': _('No time entries to update'),
+                    'data': {'created': 0, 'updated': 0}
+                }
+
+            project = Project.objects.filter(id=project_id).first()
+            if not project:
+                raise ValueError(_('Project not found'))
+
+            beneficiary_ids = {e['beneficiary_id'] for e in time_entries_data}
+            valid_beneficiaries = set(
+                Beneficiary.objects.filter(
+                    id__in=beneficiary_ids,
+                    project_id=project_id,
+                    is_deleted=False
+                ).values_list('id', flat=True)
+            )
+
+            if invalid_ids := beneficiary_ids - valid_beneficiaries:
+                raise ValueError(_('Invalid beneficiary IDs or not in project: %(ids)s') % {'ids': invalid_ids})
+
+            for entry in time_entries_data:
+                day = entry['day_number']
+                if not 1 <= day <= project.working_days:
+                    raise ValidationError(
+                        _('Day number must be between 1 and %(working_days)s.') % {'working_days': project.working_days}
+                    )
+
+                percent = entry['percent_complete']
+                if not 0 <= percent <= 100:
+                    raise ValidationError(
+                        _('Percent complete must be between 0 and 100.')
+                    )
+
+            result = BeneficiaryProjectTimeEntry.bulk_save(
+                data_list=time_entries_data,
+                user=self.user
+            )
+
+            return {
+                'success': True,
+                'message': _('Created %(created)s, updated %(updated)s time entries') % {
+                    'created': result['created'],
+                    'updated': result['updated']
+                },
+                'data': result
+            }
+
+        except Exception as exc:
+            return output_exception(
+                model_name='BeneficiaryProjectTimeEntry',
+                method='bulk_update_time_entries',
+                exception=exc
+            )
+
 
 class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
     OBJECT_TYPE = GroupBeneficiary
@@ -219,6 +286,69 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
                     super().update({ 'id': id, 'project_id': project_id })
             except Exception as exc:
                 return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+
+    @register_service_signal('group_beneficiary_service.bulk_update_time_entries')
+    def bulk_update_time_entries(self, obj_data):
+        try:
+            project_id = obj_data.get('project_id')
+            time_entries_data = obj_data.get('time_entries', [])
+
+            if not time_entries_data:
+                return {
+                    'success': True,
+                    'message': _('No time entries to update'),
+                    'data': {'created': 0, 'updated': 0}
+                }
+
+            project = Project.objects.filter(id=project_id).first()
+            if not project:
+                raise ValueError(_('Project not found'))
+
+            group_beneficiary_ids = {e['group_beneficiary_id'] for e in time_entries_data}
+            valid_group_beneficiaries = set(
+                GroupBeneficiary.objects.filter(
+                    id__in=group_beneficiary_ids,
+                    project_id=project_id,
+                    is_deleted=False
+                ).values_list('id', flat=True)
+            )
+
+            if invalid_ids := group_beneficiary_ids - valid_group_beneficiaries:
+                raise ValueError(_('Invalid group beneficiary IDs or not in project: %(ids)s') % {'ids': invalid_ids})
+
+            for entry in time_entries_data:
+                day = entry['day_number']
+                if not 1 <= day <= project.working_days:
+                    raise ValidationError(
+                        _('Day number must be between 1 and %(working_days)s.') % {'working_days': project.working_days}
+                    )
+
+                percent = entry['percent_complete']
+                if not 0 <= percent <= 100:
+                    raise ValidationError(
+                        _('Percent complete must be between 0 and 100.')
+                    )
+
+            result = GroupBeneficiaryProjectTimeEntry.bulk_save(
+                data_list=time_entries_data,
+                user=self.user
+            )
+
+            return {
+                'success': True,
+                'message': _('Created %(created)s, updated %(updated)s time entries') % {
+                    'created': result['created'],
+                    'updated': result['updated']
+                },
+                'data': result
+            }
+
+        except Exception as exc:
+            return output_exception(
+                model_name='GroupBeneficiaryProjectTimeEntry',
+                method='bulk_update_time_entries',
+                exception=exc
+            )
 
 
 class BeneficiaryImportService:

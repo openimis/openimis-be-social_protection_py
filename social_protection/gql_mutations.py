@@ -9,7 +9,8 @@ from core.schema import OpenIMISMutation
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan, Project, ProjectMutation, Activity,
-    Beneficiary, GroupBeneficiary, BeneficiaryStatus, BenefitPlanMutation
+    Beneficiary, GroupBeneficiary, BeneficiaryStatus, BenefitPlanMutation,
+    BeneficiaryProjectTimeEntry, GroupBeneficiaryProjectTimeEntry
 )
 from social_protection.services import (
     BenefitPlanService, ProjectService,
@@ -657,3 +658,83 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
         project_id = graphene.UUID(required=True)
+
+
+class TimeEntryInputType(graphene.InputObjectType):
+    id = graphene.UUID(required=False)
+    beneficiary_id = graphene.UUID(required=True)
+    day_number = graphene.Int(required=True)
+    percent_complete = graphene.Int(required=True)
+
+
+class BulkUpdateTimeEntriesInputType(OpenIMISMutation.Input):
+    project_id = graphene.UUID(required=True)
+    time_entries = graphene.List(TimeEntryInputType, required=True)
+
+
+class BulkUpdateBeneficiaryTimeEntriesMutation(BaseMutation):
+    _mutation_class = "BulkUpdateBeneficiaryTimeEntriesMutation"
+    _mutation_module = "social_protection"
+    _model = BeneficiaryProjectTimeEntry
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if isinstance(user, AnonymousUser) or not user.has_perms(
+            SocialProtectionConfig.gql_project_update_perms
+        ):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = BeneficiaryService(user)
+        res = service.bulk_update_time_entries(data)
+
+        return res if not res['success'] else None
+
+    class Input(BulkUpdateTimeEntriesInputType):
+        pass
+
+
+class GroupTimeEntryInputType(graphene.InputObjectType):
+    id = graphene.UUID(required=False)
+    group_beneficiary_id = graphene.UUID(required=True)
+    day_number = graphene.Int(required=True)
+    percent_complete = graphene.Int(required=True)
+
+
+class BulkUpdateGroupTimeEntriesInputType(OpenIMISMutation.Input):
+    project_id = graphene.UUID(required=True)
+    time_entries = graphene.List(GroupTimeEntryInputType, required=True)
+
+
+class BulkUpdateGroupBeneficiaryTimeEntriesMutation(BaseMutation):
+    _mutation_class = "BulkUpdateGroupBeneficiaryTimeEntriesMutation"
+    _mutation_module = "social_protection"
+    _model = GroupBeneficiaryProjectTimeEntry
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if isinstance(user, AnonymousUser) or not user.has_perms(
+            SocialProtectionConfig.gql_project_update_perms
+        ):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = GroupBeneficiaryService(user)
+        res = service.bulk_update_time_entries(data)
+
+        return res if not res['success'] else None
+
+    class Input(BulkUpdateGroupTimeEntriesInputType):
+        pass

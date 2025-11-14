@@ -73,3 +73,27 @@ msgstr "Group Beneficiary Project Time Entry"
 msgid "Group Beneficiary Project Time Entries"
 msgstr "Group Beneficiary Project Time Entries"
 
+#: services.py
+msgid "No time entries to update"
+msgstr "No time entries to update"
+
+#: services.py
+msgid "Project not found"
+msgstr "Project not found"
+
+#: services.py
+msgid "Invalid beneficiary IDs or not in project: %(ids)s"
+msgstr "Invalid beneficiary IDs or not in project: %(ids)s"
+
+#: services.py
+msgid "Invalid group beneficiary IDs or not in project: %(ids)s"
+msgstr "Invalid group beneficiary IDs or not in project: %(ids)s"
+
+#: services.py
+msgid "Created %(created)s, updated %(updated)s time entries"
+msgstr "Created %(created)s, updated %(updated)s time entries"
+
+#: services.py
+msgid "Percent complete must be between 0 and 100."
+msgstr "Percent complete must be between 0 and 100."
+
