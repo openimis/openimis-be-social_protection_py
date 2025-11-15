@@ -1,7 +1,8 @@
 import graphene as graphene
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import transaction
+from django.utils.translation import gettext as _
 
 from core.gql.gql_mutations.base_mutation import BaseHistoryModelCreateMutationMixin, BaseMutation, \
     BaseHistoryModelUpdateMutationMixin, BaseHistoryModelDeleteMutationMixin
@@ -617,7 +618,7 @@ class ProjectEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
     def _validate_mutation(cls, user, **data):
         super()._validate_mutation(user, **data)
         if not user.has_perms(
-                SocialProtectionConfig.gql_project_update_perms):
+                SocialProtectionConfig.gql_project_beneficiary_enroll_perms):
             raise PermissionDenied(_("unauthorized"))
 
     @classmethod
@@ -643,7 +644,7 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
     def _validate_mutation(cls, user, **data):
         super()._validate_mutation(user, **data)
         if not user.has_perms(
-                SocialProtectionConfig.gql_project_update_perms):
+                SocialProtectionConfig.gql_project_beneficiary_enroll_perms):
             raise PermissionDenied(_("unauthorized"))
 
     @classmethod
@@ -680,7 +681,7 @@ class BulkUpdateBeneficiaryTimeEntriesMutation(BaseMutation):
     @classmethod
     def _validate_mutation(cls, user, **data):
         if isinstance(user, AnonymousUser) or not user.has_perms(
-            SocialProtectionConfig.gql_project_update_perms
+            SocialProtectionConfig.gql_project_beneficiary_time_entry_perms
         ):
             raise ValidationError("mutation.authentication_required")
 
@@ -720,7 +721,7 @@ class BulkUpdateGroupBeneficiaryTimeEntriesMutation(BaseMutation):
     @classmethod
     def _validate_mutation(cls, user, **data):
         if isinstance(user, AnonymousUser) or not user.has_perms(
-            SocialProtectionConfig.gql_project_update_perms
+            SocialProtectionConfig.gql_project_beneficiary_time_entry_perms
         ):
             raise ValidationError("mutation.authentication_required")
 

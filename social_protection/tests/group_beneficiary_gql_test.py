@@ -19,7 +19,9 @@ from social_protection.tests.test_helpers import (
     create_project,
 )
 from social_protection.services import GroupBeneficiaryService
-from social_protection.models import GroupBeneficiaryProjectTimeEntry
+from social_protection.models import GroupBeneficiaryProjectTimeEntry, GroupBeneficiary
+from social_protection.apps import SocialProtectionConfig
+from core.models import Role, RoleRight, UserRole
 from location.test_helpers import create_test_village
 import json
 
@@ -31,12 +33,50 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         user = mock.Mock(is_anonymous=True)
 
     @classmethod
+    def _add_permissions_to_user(cls, user, permission_codes):
+        """Add specific permissions to a user"""
+        if hasattr(user, 'i_user') and user.i_user:
+            role = Role.objects.create(
+                name=f"TestRole_{user.username}",
+                is_system=0,
+                is_blocked=False,
+                audit_user_id=-1
+            )
+
+            for perm_code in permission_codes:
+                RoleRight.objects.create(
+                    role=role,
+                    right_id=int(perm_code),
+                    audit_user_id=-1
+                )
+
+            UserRole.objects.create(
+                user=user.i_user,
+                role=role,
+                audit_user_id=-1
+            )
+
+    @classmethod
     def setUpClass(cls):
         super(GroupBeneficiaryGQLTest, cls).setUpClass()
         cls.user = User.objects.filter(username='admin', i_user__isnull=False).first()
         if not cls.user:
             cls.user = create_test_interactive_user(username='admin')
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
+
+        cls.test_officer = create_test_interactive_user(
+            username="grpBeneUserNoRight", roles=[1])
+        cls.test_officer_token = BaseTestContext(user=cls.test_officer).get_jwt()
+
+        cls.enroll_user = create_test_interactive_user(
+            username="grpBeneEnrollUser", roles=[1])
+        cls._add_permissions_to_user(cls.enroll_user, SocialProtectionConfig.gql_project_beneficiary_enroll_perms)
+        cls.enroll_user_token = BaseTestContext(user=cls.enroll_user).get_jwt()
+
+        cls.time_entry_user = create_test_interactive_user(
+            username="grpBeneTimeEntryUser", roles=[1])
+        cls._add_permissions_to_user(cls.time_entry_user, SocialProtectionConfig.gql_project_beneficiary_time_entry_perms)
+        cls.time_entry_user_token = BaseTestContext(user=cls.time_entry_user).get_jwt()
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
             'code': 'GGQLTest',
             'type': 'GROUP'
@@ -712,3 +752,125 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         sorted_entries = sorted(time_entries, key=lambda e: e['dayNumber'])
         self.assertEqual([e['dayNumber'] for e in sorted_entries], [1, 2, 3])
         self.assertEqual([e['percentComplete'] for e in sorted_entries], [30, 60, 90])
+
+    def test_project_group_beneficiary_enrollment(self):
+        project = create_project(
+            'test group enrollment permission project',
+            self.benefit_plan,
+            self.user.username,
+        )
+
+        # Get the group beneficiary ID (not group ID)
+        group_beneficiary = GroupBeneficiary.objects.filter(
+            group=self.group_0child,
+            benefit_plan=self.benefit_plan
+        ).first()
+        group_beneficiary_id = group_beneficiary.id
+
+        query_str = f'''
+            mutation {{
+              enrollGroupProject(
+                input: {{
+                  ids: ["{group_beneficiary_id}"]
+                  projectId: "{str(project.id)}"
+                }}
+              ) {{
+                clientMutationId
+                internalId
+              }}
+            }}
+        '''
+
+        # Test for unauthenticated user
+        response = self.query(query_str)
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollGroupProject']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        # Test for user without permission (test_officer)
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollGroupProject']
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
+
+        # Test for user with enrollment permission
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.enroll_user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollGroupProject']
+        self.assert_mutation_success(data['internalId'], self.enroll_user_token)
+
+        # Verify that expected project group beneficiary is persisted in the db
+        group_beneficiary.refresh_from_db()
+        self.assertIsNotNone(group_beneficiary.project)
+        self.assertEqual(group_beneficiary.project.id, project.id)
+
+    def test_bulk_update_group_beneficiary_time_entries(self):
+        project = create_project(
+            'test group time entry permission project',
+            self.benefit_plan,
+            self.user.username,
+        )
+
+        # Enroll group beneficiary to project
+        group_beneficiary = GroupBeneficiary.objects.filter(
+            group=self.group_0child,
+            benefit_plan=self.benefit_plan
+        ).first()
+        group_beneficiary.project = project
+        group_beneficiary.save(user=self.user)
+
+        query_str = f'''
+            mutation {{
+              bulkUpdateGroupBeneficiaryTimeEntries(
+                input: {{
+                  projectId: "{str(project.id)}"
+                  timeEntries: [{{
+                    groupBeneficiaryId: "{str(group_beneficiary.id)}"
+                    dayNumber: 1
+                    percentComplete: 50
+                  }}]
+                }}
+              ) {{
+                clientMutationId
+                internalId
+              }}
+            }}
+        '''
+
+        # Test for unauthenticated user
+        response = self.query(query_str)
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateGroupBeneficiaryTimeEntries']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        # Test for user without permission (test_officer)
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateGroupBeneficiaryTimeEntries']
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'authentication_required')
+
+        # Test for user with time entry permission
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.time_entry_user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateGroupBeneficiaryTimeEntries']
+        self.assert_mutation_success(data['internalId'], self.time_entry_user_token)
+
+        # Verify that expected time entry is persisted in the db
+        time_entry = GroupBeneficiaryProjectTimeEntry.objects.filter(
+            group_beneficiary=group_beneficiary,
+            day_number=1
+        ).first()
+        self.assertIsNotNone(time_entry)
+        self.assertEqual(time_entry.percent_complete, 50)
