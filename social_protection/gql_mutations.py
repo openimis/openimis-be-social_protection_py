@@ -680,10 +680,10 @@ class BulkUpdateBeneficiaryTimeEntriesMutation(BaseMutation):
 
     @classmethod
     def _validate_mutation(cls, user, **data):
-        if isinstance(user, AnonymousUser) or not user.has_perms(
-            SocialProtectionConfig.gql_project_beneficiary_time_entry_perms
-        ):
+        if isinstance(user, AnonymousUser):
             raise ValidationError("mutation.authentication_required")
+        if not user.has_perms(SocialProtectionConfig.gql_project_beneficiary_time_entry_perms):
+            raise ValidationError("mutation.unauthorized")
 
     @classmethod
     def _mutate(cls, user, **data):
@@ -720,10 +720,10 @@ class BulkUpdateGroupBeneficiaryTimeEntriesMutation(BaseMutation):
 
     @classmethod
     def _validate_mutation(cls, user, **data):
-        if isinstance(user, AnonymousUser) or not user.has_perms(
-            SocialProtectionConfig.gql_project_beneficiary_time_entry_perms
-        ):
+        if isinstance(user, AnonymousUser):
             raise ValidationError("mutation.authentication_required")
+        if not user.has_perms(SocialProtectionConfig.gql_project_beneficiary_time_entry_perms):
+            raise ValidationError("mutation.unauthorized")
 
     @classmethod
     def _mutate(cls, user, **data):

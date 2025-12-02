@@ -883,7 +883,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         )
         self.assertResponseNoErrors(response)
         data = json.loads(response.content)['data']['bulkUpdateBeneficiaryTimeEntries']
-        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'authentication_required')
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
 
         # Test for user with time entry permission
         response = self.query(
