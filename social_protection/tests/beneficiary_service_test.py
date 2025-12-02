@@ -1,4 +1,5 @@
 import copy
+import uuid
 
 from django.test import TestCase
 
@@ -206,17 +207,23 @@ class BeneficiaryTimeEntryServiceTest(TestCase):
             cls.service,
             cls.individual1,
             cls.benefit_plan,
-            {'status': 'ACTIVE', 'project_id': cls.project.id}
+            {'status': 'ACTIVE'}
         )
         cls.beneficiary1 = Beneficiary.objects.get(id=cls.beneficiary1_uuid)
+        cls.beneficiary1.project = cls.project
+        cls.beneficiary1.save(user=cls.user)
 
         cls.beneficiary2_uuid = add_individual_to_benefit_plan(
             cls.service,
             cls.individual2,
             cls.benefit_plan,
-            {'status': 'ACTIVE', 'project_id': cls.project.id}
+            {'status': 'ACTIVE'}
         )
         cls.beneficiary2 = Beneficiary.objects.get(id=cls.beneficiary2_uuid)
+        cls.beneficiary2.project = cls.project
+        cls.beneficiary2.save(user=cls.user)
+
+
 
     def test_create_time_entries(self):
         obj_data = {
@@ -297,19 +304,23 @@ class BeneficiaryTimeEntryServiceTest(TestCase):
         self.assertEqual(latest_history.percent_complete, 90)
 
     def test_invalid_project_id(self):
-        import uuid
         obj_data = {
             'project_id': uuid.uuid4(),
-            'time_entries': []
+            'time_entries': [
+                {
+                    'beneficiary_id': self.beneficiary1.id,
+                    'day_number': 5,
+                    'percent_complete': 50,
+                }
+            ]
         }
 
         result = self.service.bulk_update_time_entries(obj_data)
 
         self.assertFalse(result['success'])
-        self.assertIn('not found', result['message'].lower())
+        self.assertIn('Project not found', result['detail'])
 
     def test_invalid_beneficiary_id(self):
-        import uuid
         obj_data = {
             'project_id': self.project.id,
             'time_entries': [
@@ -324,7 +335,7 @@ class BeneficiaryTimeEntryServiceTest(TestCase):
         result = self.service.bulk_update_time_entries(obj_data)
 
         self.assertFalse(result['success'])
-        self.assertIn('invalid', result['message'].lower())
+        self.assertIn('Invalid beneficiary IDs', result['detail'])
 
     def test_day_number_out_of_range(self):
         obj_data = {
@@ -341,7 +352,7 @@ class BeneficiaryTimeEntryServiceTest(TestCase):
         result = self.service.bulk_update_time_entries(obj_data)
 
         self.assertFalse(result['success'])
-        self.assertIn('range', result['message'].lower())
+        self.assertIn('Day number must be between 1 and 10.', result['detail'])
 
     def test_empty_time_entries(self):
         obj_data = {

@@ -1,4 +1,5 @@
 import copy
+import uuid
 
 from django.test import TestCase
 
@@ -214,17 +215,21 @@ class GroupBeneficiaryTimeEntryServiceTest(TestCase):
             cls.service,
             cls.group1,
             cls.benefit_plan,
-            {'status': 'ACTIVE', 'project_id': cls.project.id}
+            {'status': 'ACTIVE'}
         )
         cls.group_beneficiary1 = GroupBeneficiary.objects.get(id=cls.group_beneficiary1_uuid)
+        cls.group_beneficiary1.project = cls.project
+        cls.group_beneficiary1.save(user=cls.user)
 
         cls.group_beneficiary2_uuid = add_group_to_benefit_plan(
             cls.service,
             cls.group2,
             cls.benefit_plan,
-            {'status': 'ACTIVE', 'project_id': cls.project.id}
+            {'status': 'ACTIVE'}
         )
         cls.group_beneficiary2 = GroupBeneficiary.objects.get(id=cls.group_beneficiary2_uuid)
+        cls.group_beneficiary2.project = cls.project
+        cls.group_beneficiary2.save(user=cls.user)
 
     def test_create_group_time_entries(self):
         obj_data = {
@@ -305,7 +310,6 @@ class GroupBeneficiaryTimeEntryServiceTest(TestCase):
         self.assertEqual(latest_history.percent_complete, 85)
 
     def test_invalid_group_beneficiary_id(self):
-        import uuid
         obj_data = {
             'project_id': self.project.id,
             'time_entries': [
@@ -320,7 +324,7 @@ class GroupBeneficiaryTimeEntryServiceTest(TestCase):
         result = self.service.bulk_update_time_entries(obj_data)
 
         self.assertFalse(result['success'])
-        self.assertIn('invalid', result['message'].lower())
+        self.assertIn('Invalid group beneficiary IDs', result['detail'])
 
     def test_day_number_validation(self):
         obj_data = {
@@ -337,4 +341,4 @@ class GroupBeneficiaryTimeEntryServiceTest(TestCase):
         result = self.service.bulk_update_time_entries(obj_data)
 
         self.assertFalse(result['success'])
-        self.assertIn('range', result['message'].lower())
+        self.assertIn('Day number must be between 1 and 15.', result['detail'])
