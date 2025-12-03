@@ -9,7 +9,7 @@ class TestValidateProjectUniqueName(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        user = create_test_interactive_user(username="admin")
+        user = create_test_interactive_user(username='Admin')
         username = user.username
 
         cls.benefit_plan = create_benefit_plan(username=username)

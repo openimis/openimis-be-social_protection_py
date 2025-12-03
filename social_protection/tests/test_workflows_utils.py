@@ -10,7 +10,7 @@ from social_protection.models import BenefitPlan
 class TestBasePythonWorkflowExecutor(TestCase):
 
     def setUp(self):
-        self.user = create_test_interactive_user(username="admin")
+        self.user = create_test_interactive_user(username='Admin')
         self.upload_id = uuid.uuid4()
         
         self.plan_schema = {"properties": {}}

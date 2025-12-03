@@ -33,9 +33,9 @@ class GroupBeneficiaryImportGQLTest(openIMISGraphQLTestCase, TaskDataMixin):
     @classmethod
     def setUpClass(cls):
         super(GroupBeneficiaryImportGQLTest, cls).setUpClass()
-        cls.user = User.objects.filter(username='admin', i_user__isnull=False).first()
+        cls.user = User.objects.filter(username='Admin', i_user__isnull=False).first()
         if not cls.user:
-            cls.user = create_test_interactive_user(username='admin')
+            cls.user = create_test_interactive_user(username='Admin')
             
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={

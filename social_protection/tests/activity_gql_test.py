@@ -10,9 +10,9 @@ class ActivitiesGQLTest(openIMISGraphQLTestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.filter(username='admin', i_user__isnull=False).first()
+        cls.user = User.objects.filter(username='Admin', i_user__isnull=False).first()
         if not cls.user:
-            cls.user=create_test_interactive_user(username='admin')
+            cls.user=create_test_interactive_user(username='Admin')
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
         username = cls.user.username
 
