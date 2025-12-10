@@ -66,4 +66,3 @@ if 'opensearch_reports' in apps.app_configs and not is_unit_test_env:
                 else:
                     items[new_key] = v
             return items
-

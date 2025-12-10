@@ -3,7 +3,7 @@ from django.utils.translation import override
 from social_protection.validation import validate_project_unique_name
 from core.test_helpers import create_test_interactive_user
 from social_protection.tests.test_helpers import create_benefit_plan, create_project
-from social_protection.models import Project
+
 
 class TestValidateProjectUniqueName(TestCase):
 
@@ -44,4 +44,3 @@ class TestValidateProjectUniqueName(TestCase):
             self.project.name, self.benefit_plan.id, uuid=self.project.id
         )
         self.assertEqual(len(errors), 0)
-

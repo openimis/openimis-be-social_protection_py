@@ -1,11 +1,11 @@
 import json
 import random
+import time
 import string
 import copy
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
 from core.models.base_mutation import MutationLog
 from individual.models import Individual, Group, GroupIndividual
-from location.models import Location
 from social_protection.models import BenefitPlan, Activity, Project
 from social_protection.tests.data import (
     service_add_payload_valid_schema,
@@ -19,6 +19,7 @@ def generate_random_string(length=6):
     letters = string.ascii_uppercase
     return ''.join(random.choice(letters) for i in range(length))
 
+
 def merge_dicts(original, override):
     updated = copy.deepcopy(original)
     for key, value in override.items():
@@ -28,12 +29,14 @@ def merge_dicts(original, override):
             updated[key] = value
     return updated
 
+
 def create_benefit_plan(username, payload_override={}):
     updated_payload = merge_dicts(service_add_payload_valid_schema, payload_override)
     benefit_plan = BenefitPlan(**updated_payload)
     benefit_plan.save(username=username)
 
     return benefit_plan
+
 
 def find_or_create_benefit_plan(payload, username):
     qs = BenefitPlan.objects.filter(**payload)
@@ -42,6 +45,7 @@ def find_or_create_benefit_plan(payload, username):
     else:
         return create_benefit_plan(username, payload)
 
+
 def create_individual(username, payload_override={}):
     updated_payload = merge_dicts(service_add_individual_payload_with_ext, payload_override)
     individual = Individual(**updated_payload)
@@ -49,11 +53,13 @@ def create_individual(username, payload_override={}):
 
     return individual
 
+
 def create_group(username, payload_override={}):
     updated_payload = merge_dicts({'code': generate_random_string()}, payload_override)
     group = Group(**updated_payload)
     group.save(username=username)
     return group
+
 
 def add_individual_to_group(username, individual, group, is_head=True):
     object_data = {
@@ -66,11 +72,13 @@ def add_individual_to_group(username, individual, group, is_head=True):
     group_individual.save(username=username)
     return group_individual
 
+
 def create_group_with_individual(username, group_override={}, individual_override={}):
     individual = create_individual(username, individual_override)
     group = create_group(username, group_override)
     group_individual = add_individual_to_group(username, individual, group)
     return individual, group, group_individual
+
 
 def add_individual_to_benefit_plan(service, individual, benefit_plan, payload_override={}):
     payload = {
@@ -86,6 +94,7 @@ def add_individual_to_benefit_plan(service, individual, benefit_plan, payload_ov
     uuid = result.get('data', {}).get('uuid', None)
     return uuid
 
+
 def add_group_to_benefit_plan(service, group, benefit_plan, payload_override={}):
     payload = {
         **service_beneficiary_add_payload,
@@ -100,6 +109,7 @@ def add_group_to_benefit_plan(service, group, benefit_plan, payload_override={})
     uuid = result.get('data', {}).get('uuid', None)
     return uuid
 
+
 def find_or_create_activity(name, username):
     activity_found = Activity.objects.filter(name=name)
     if activity_found:
@@ -108,6 +118,7 @@ def find_or_create_activity(name, username):
         activity = Activity(name=name)
         activity.save(username=username)
     return activity
+
 
 def create_project(name, benefit_plan, username, allows_multiple_enrollments=False):
     activity = find_or_create_activity("Community Outreach", username)
@@ -125,11 +136,11 @@ def create_project(name, benefit_plan, username, allows_multiple_enrollments=Fal
     project.save(username=username)
     return project
 
+
 class PatchedOpenIMISGraphQLTestCase(openIMISGraphQLTestCase):
 
     # overriding helper method from core to allow errors
     def get_mutation_result(self, mutation_uuid, token, internal=False):
-        content = None
         while True:
             # wait for the mutation to be done
             if internal:

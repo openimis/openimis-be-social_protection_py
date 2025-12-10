@@ -1,14 +1,9 @@
 from unittest import mock
-import graphene
 from core.models import User
 from core.models.openimis_graphql_test_case import BaseTestContext
 from core.test_helpers import create_test_interactive_user
 from social_protection import schema as sp_schema
 from graphene import Schema
-from graphene.test import Client
-from graphene_django.utils.testing import GraphQLTestCase
-from django.conf import settings
-from graphql_jwt.shortcuts import get_token
 from social_protection.tests.test_helpers import (
     PatchedOpenIMISGraphQLTestCase,
     create_benefit_plan,
@@ -22,9 +17,9 @@ from social_protection.services import GroupBeneficiaryService
 from location.test_helpers import create_test_village
 import json
 
+
 class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
     schema = Schema(query=sp_schema.Query)
-
 
     class AnonymousUserContext:
         user = mock.Mock(is_anonymous=True)
@@ -56,7 +51,7 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         add_individual_to_group(cls.user.username, child1, cls.group_2child)
         add_individual_to_group(cls.user.username, child2, cls.group_2child)
 
-        cls.individual_1child, cls.group_1child, _ = create_group_with_individual(
+        cls.individual_1child, cls.group_1child, __ = create_group_with_individual(
             cls.user.username,
             individual_override={
                 'first_name': 'OneChild',
@@ -65,7 +60,7 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 }
             }
         )
-        cls.individual, cls.group_0child, _ =  create_group_with_individual(
+        cls.individual, cls.group_0child, __ = create_group_with_individual(
             cls.user.username,
             individual_override={
                 'first_name': 'NoChild',
@@ -74,7 +69,7 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 }
             }
         )
-        cls.individual_not_enrolled, cls.group_not_enrolled, _ =  create_group_with_individual(
+        cls.individual_not_enrolled, cls.group_not_enrolled, __ = create_group_with_individual(
             cls.user.username,
             individual_override={
                 'first_name': 'Not enrolled',
@@ -119,8 +114,7 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 }}
               }}
             }}
-            """
-        , headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+            """, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
         self.assertResponseNoErrors(response)
         response_data = json.loads(response.content)
 
@@ -141,7 +135,6 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             e['node']['isEligible'] is None for e in beneficiary_data['edges']
         )
         self.assertTrue(all(eligible_none))
-
 
     def test_query_beneficiary_custom_filter(self):
         query_str = f"""
@@ -206,7 +199,6 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         group_data = beneficiary_node['group']
         self.assertEqual(group_data['code'], self.group_2child.code)
 
-
     def test_query_beneficiary_status_filter(self):
         query_str = f"""
             query {{
@@ -268,7 +260,6 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
 
         beneficiary_2child = find_beneficiary_by_code(self.group_2child.code)
         self.assertTrue(beneficiary_2child['isEligible'])
-
 
     def test_query_beneficiary_eligible_filter(self):
         query_str = f"""

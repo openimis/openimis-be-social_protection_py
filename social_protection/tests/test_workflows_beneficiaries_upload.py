@@ -16,7 +16,7 @@ from social_protection.models import (
 )
 from social_protection.tests.test_helpers import create_benefit_plan
 from social_protection.workflows.base_beneficiary_upload import process_import_beneficiaries_workflow
-from location.test_helpers import create_test_village, assign_user_districts
+from location.test_helpers import create_test_village
 from unittest.mock import patch
 from unittest import skipIf
 
@@ -49,17 +49,16 @@ class ProcessImportBeneficiariesWorkflowTest(TestCase):
     def setUp(self):
         self.user = create_test_interactive_user(username='Admin')
         self.user_uuid = self.user.id
-        
         self.plan_schema = {"properties": {}}
 
         # create BenefitPlan with the required fields and save with username
         self.benefit_plan = create_benefit_plan(self.user.username, {
-                "name": "Test Benefit Plan",
-                "description": "A test benefit plan",
-                "code": "TESTPlan",
-                "max_beneficiaries": 1000,
-                "beneficiary_data_schema": {}
-            })
+            "name": "Test Benefit Plan",
+            "description": "A test benefit plan",
+            "code": "TESTPlan",
+            "max_beneficiaries": 1000,
+            "beneficiary_data_schema": {}
+        })
 
         self.benefit_plan_group = create_benefit_plan(self.user.username, {
             "name": "Test Group Benefit Plan",
@@ -187,7 +186,7 @@ class ProcessImportBeneficiariesWorkflowTest(TestCase):
     @patch('social_protection.apps.SocialProtectionConfig.enable_maker_checker_for_beneficiary_upload', False)
     def test_process_import_beneficiaries_workflow_with_all_valid_entries(self):
         # Update invalid entry in IndividualDataSource to valid data
-        self.invalid_data_source.json_ext={
+        self.invalid_data_source.json_ext = {
             "first_name": "Jane Workflow",
             "last_name": "Doe",
             "dob": "1982-01-01",

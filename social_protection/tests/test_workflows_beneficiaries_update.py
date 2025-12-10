@@ -46,12 +46,12 @@ class ProcessUpdateBeneficiariesWorkflowTest(TestCase):
 
         self.plan_schema = {"properties": {}}
         self.benefit_plan = create_benefit_plan(self.user.username, {
-                "name": "Test Benefit Plan",
-                "description": "A test benefit plan",
-                "code": "TESTPlan",
-                "max_beneficiaries": 1000,
-                "beneficiary_data_schema": {}
-            })
+            "name": "Test Benefit Plan",
+            "description": "A test benefit plan",
+            "code": "TESTPlan",
+            "max_beneficiaries": 1000,
+            "beneficiary_data_schema": {}
+        })
 
         individual1_dict = {
             'first_name': 'Foo 1',
@@ -68,20 +68,20 @@ class ProcessUpdateBeneficiariesWorkflowTest(TestCase):
             'json_ext': {},
         }
         self.individual2 = create_individual(self.user.username, individual2_dict)
-        
+
         self.service = BeneficiaryService(self.user)
-        
+
         # Add individuals to the benefit plan and create beneficiaries
         self.beneficiary1_uuid = add_individual_to_benefit_plan(
-            self.service, 
-            self.individual1, 
-            self.benefit_plan, 
+            self.service,
+            self.individual1,
+            self.benefit_plan,
             payload_override={'status': 'ACTIVE'}
         )
         self.beneficiary2_uuid = add_individual_to_benefit_plan(
-            self.service, 
-            self.individual2, 
-            self.benefit_plan, 
+            self.service,
+            self.individual2,
+            self.benefit_plan,
             payload_override={'status': 'ACTIVE'}
         )
 
@@ -162,7 +162,7 @@ class ProcessUpdateBeneficiariesWorkflowTest(TestCase):
         # individual data should not be updated
         individual1_from_db = Individual.objects.get(id=self.individual1.id)
         self.assertNotEqual(individual1_from_db.first_name, self.individual1_updated_first_name)
-        
+
         beneficiary1_from_db = Beneficiary.objects.get(id=self.beneficiary1_uuid)
         self.assertNotEqual(beneficiary1_from_db.status, self.beneficiary1_updated_status)
 
@@ -201,7 +201,7 @@ class ProcessUpdateBeneficiariesWorkflowTest(TestCase):
         individual1_from_db = Individual.objects.get(id=self.individual1.id)
         self.assertEqual(individual1_from_db.first_name, self.individual1_updated_first_name)
         self.assertEqual(individual1_from_db.location.name, self.village.name)
-        
+
         # Beneficiary status update shouldn't make any effect as it is not supported
         beneficiary1_from_db = Beneficiary.objects.get(id=self.beneficiary1_uuid)
         self.assertNotEqual(beneficiary1_from_db.status, self.beneficiary1_updated_status)

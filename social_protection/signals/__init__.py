@@ -11,8 +11,6 @@ from social_protection.signals.on_validation_import_valid_items import on_task_c
 
 from social_protection.signals.on_confirm_enrollment_of_individual import on_confirm_enrollment_of_individual
 from social_protection.signals.on_confirm_enrollment_of_group import on_confirm_enrollment_of_group
-from social_protection.signals.on_validation_import_valid_items import on_task_complete_import_validated, \
-    on_task_resolve
 
 from tasks_management.models import Task
 from tasks_management.services import on_task_complete_service_handler

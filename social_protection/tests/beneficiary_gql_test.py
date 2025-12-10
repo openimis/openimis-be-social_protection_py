@@ -1,14 +1,9 @@
 from unittest import mock
-import graphene
 from core.models import User
 from core.models.openimis_graphql_test_case import BaseTestContext
 from core.test_helpers import create_test_interactive_user
 from social_protection import schema as sp_schema
 from graphene import Schema
-from graphene.test import Client
-from graphene_django.utils.testing import GraphQLTestCase
-from django.conf import settings
-from graphql_jwt.shortcuts import get_token
 from social_protection.tests.test_helpers import (
     PatchedOpenIMISGraphQLTestCase,
     create_benefit_plan,
@@ -19,6 +14,7 @@ from social_protection.tests.test_helpers import (
 from social_protection.services import BeneficiaryService
 from location.test_helpers import create_test_village
 import json
+
 
 class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
     schema = Schema(query=sp_schema.Query)
@@ -31,7 +27,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         super().setUpClass()
         cls.user = User.objects.filter(username='Admin', i_user__isnull=False).first()
         if not cls.user:
-            cls.user=create_test_interactive_user(username='Admin')
+            cls.user = create_test_interactive_user(username='Admin')
         # some test data so as to created contract properly
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
@@ -45,13 +41,13 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 'number_of_children': 1
             }
         })
-        cls.individual =  create_individual(cls.user.username, payload_override={
+        cls.individual = create_individual(cls.user.username, payload_override={
             'first_name': 'NoChild',
             'json_ext': {
                 'number_of_children': 0
             }
         })
-        cls.individual_not_enrolled =  create_individual(cls.user.username, payload_override={
+        cls.individual_not_enrolled = create_individual(cls.user.username, payload_override={
             'first_name': 'Not enrolled',
             'json_ext': {
                 'number_of_children': 0,
@@ -94,9 +90,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                   }}
                 }}
               }}
-            }}
-            """
-        , headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+            }}""", headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
         self.assertResponseNoErrors(response)
         response_data = json.loads(response.content)
 
@@ -117,7 +111,6 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             e['node']['isEligible'] is None for e in beneficiary_data['edges']
         )
         self.assertTrue(all(eligible_none))
-
 
     def test_query_beneficiary_individual_filter(self):
         query_str = f"""
@@ -164,7 +157,6 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             beneficiary_data['edges'][0]['node']['individual']['firstName'],
             self.individual.first_name
         )
-
 
     def test_query_beneficiary_custom_filter(self):
         query_str = f"""
@@ -229,7 +221,6 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         individual_data = beneficiary_node['individual']
         self.assertEqual(individual_data['firstName'], self.individual_2child.first_name)
 
-
     def test_query_beneficiary_status_filter(self):
         query_str = f"""
             query {{
@@ -292,7 +283,6 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
 
         beneficiary_2child = find_beneficiary_by_first_name(self.individual_2child.first_name)
         self.assertTrue(beneficiary_2child['isEligible'])
-
 
     def test_query_beneficiary_eligibility_filter(self):
         query_str = f"""
