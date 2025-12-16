@@ -95,7 +95,7 @@ class BeneficiaryServiceTest(TestCase):
         for i, individual in enumerate([self.individual, self.individual2]):
             uuid = self.add_beneficiary_return_uuid(individual, self.benefit_plan_no_max, status="ACTIVE")
             self.check_beneficiary_exists(uuid, with_status="ACTIVE")
-            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i+1} beneficiaries should be added and active")
+            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i + 1} beneficiaries should be added and active")
 
     def test_update_beneficiary(self):
         def create_and_update_to_active(individual, benefit_plan):
@@ -126,7 +126,7 @@ class BeneficiaryServiceTest(TestCase):
             result, uuid = create_and_update_to_active(individual, self.benefit_plan_no_max)
             self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
             self.check_beneficiary_exists(uuid, "ACTIVE")
-            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i+1} beneficiaries should be added and active")
+            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i + 1} beneficiaries should be added and active")
 
     def test_delete_beneficiary(self):
         uuid = self.add_beneficiary_return_uuid(self.individual)
