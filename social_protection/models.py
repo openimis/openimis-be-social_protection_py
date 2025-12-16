@@ -149,7 +149,7 @@ class AbstractProjectTimeEntry(core_models.HistoryBusinessModel):
                 _("Beneficiary must be assigned to a project before recording time entries.")
             )
 
-        if self.day_number > project.working_days:
+        if not 1 <= self.day_number <= project.working_days:
             raise ValidationError(
                 _("Day number must be between 1 and %(working_days)s.") % {"working_days": project.working_days}
             )
