@@ -1,5 +1,5 @@
 from typing import Iterable
-from django.db.models import Q, Value, Func, F
+from django.db.models import Q
 import pandas as pd
 
 from individual.models import IndividualDataSource

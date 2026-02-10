@@ -5,7 +5,7 @@ import mimetypes
 import os
 
 from django.db.models import Q
-from django.http import HttpResponse, StreamingHttpResponse
+from django.http import StreamingHttpResponse
 from django.utils.translation import gettext as _
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -40,12 +40,12 @@ def is_valid_file(import_file):
     if file_extension not in ALLOWED_EXTENSIONS:
         return False, _("Invalid file type. Allowed: .csv, .xls, .xlsx")
 
-    file_mime_type, _ = mimetypes.guess_type(import_file.name)
+    file_mime_type, __ = mimetypes.guess_type(import_file.name)
     if not file_mime_type:
         return False, _("Could not determine file type")
 
     if file_mime_type not in ALLOWED_MIME_TYPES:
-        return False, _(f"Invalid MIME type:") + f" {file_mime_type}"
+        return False, _("Invalid MIME type:") + f" {file_mime_type}"
 
     return True, None
 
@@ -251,19 +251,19 @@ def _resolve_import_beneficiaries_args(request):
     group_aggregation_column = request.POST.get('group_aggregation_column')
 
     if not import_file:
-        raise ValueError(f'Import file not provided')
+        raise ValueError('Import file not provided')
     if not benefit_plan_uuid:
-        raise ValueError(f'Benefit plan UUID not provided')
+        raise ValueError('Benefit plan UUID not provided')
     if not workflow_name:
-        raise ValueError(f'Workflow name not provided')
+        raise ValueError('Workflow name not provided')
     if not workflow_group:
-        raise ValueError(f'Workflow group not provided')
+        raise ValueError('Workflow group not provided')
     benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_uuid).first()
     if not benefit_plan:
         raise ValueError('Benefit Plan not found: {}'.format(benefit_plan_uuid))
-    if (group_aggregation_column and
-            benefit_plan.type != BenefitPlan.BenefitPlanType.GROUP_TYPE):
-        raise ValueError(f'Group aggregation only for group type benefit plans')
+    if (group_aggregation_column
+            and benefit_plan.type != BenefitPlan.BenefitPlanType.GROUP_TYPE):
+        raise ValueError('Group aggregation only for group type benefit plans')
 
     result = WorkflowService.get_workflows(workflow_name, workflow_group)
     if not result.get('success'):
@@ -277,8 +277,6 @@ def _resolve_import_beneficiaries_args(request):
         raise ValueError('Multiple workflows found: group={} name={}'.format(workflow_group, workflow_name))
 
     workflow = workflows[0]
-
-
     return import_file, workflow, benefit_plan, group_aggregation_column
 
 

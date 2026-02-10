@@ -1,14 +1,11 @@
-import copy
 
 from django.test import TestCase
 
 from individual.models import Individual
-from individual.tests.data import service_add_individual_payload
 
 from social_protection.models import Beneficiary, BenefitPlan
 from social_protection.services import BeneficiaryService
 from social_protection.tests.data import (
-    service_add_payload,
     service_beneficiary_add_payload,
     service_beneficiary_update_status_active_payload
 )
@@ -73,7 +70,7 @@ class BeneficiaryServiceTest(TestCase):
         self.assertEqual(query.count(), 1)
         if with_status:
             self.assertEqual(query.first().status, with_status)
-        
+
     def check_active_beneficiaries_count_eq(self, count, benefit_plan, msg=None):
         active_beneficiaries = self.query_all.filter(benefit_plan_id=benefit_plan.id, status="ACTIVE").distinct()
         self.assertEqual(active_beneficiaries.count(), count, msg)
@@ -92,13 +89,13 @@ class BeneficiaryServiceTest(TestCase):
         self.assertFalse(result.get('success', True), "Benefit plan's 'max active beneficiaries' was not enforced")
         self.assertEqual(self.query_all.filter(individual__first_name=self.individual3.first_name).count(), 0)
         self.check_active_beneficiaries_count_eq(1, self.benefit_plan, "Second active beneficiary creation should have been blocked")
-        
+
         self.assertEqual(self.benefit_plan_no_max.max_beneficiaries, None)
 
         for i, individual in enumerate([self.individual, self.individual2]):
             uuid = self.add_beneficiary_return_uuid(individual, self.benefit_plan_no_max, status="ACTIVE")
             self.check_beneficiary_exists(uuid, with_status="ACTIVE")
-            self.check_active_beneficiaries_count_eq(i+1, self.benefit_plan_no_max, f"{i+1} beneficiaries should be added and active")
+            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i + 1} beneficiaries should be added and active")
 
     def test_update_beneficiary(self):
         def create_and_update_to_active(individual, benefit_plan):
@@ -110,7 +107,7 @@ class BeneficiaryServiceTest(TestCase):
                 'benefit_plan_id': benefit_plan.id
             }
             return self.service.update(update_payload), uuid
-        
+
         self.assertEqual(self.benefit_plan.max_beneficiaries, 1)
 
         result, uuid = create_and_update_to_active(self.individual, self.benefit_plan)
@@ -129,7 +126,7 @@ class BeneficiaryServiceTest(TestCase):
             result, uuid = create_and_update_to_active(individual, self.benefit_plan_no_max)
             self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
             self.check_beneficiary_exists(uuid, "ACTIVE")
-            self.check_active_beneficiaries_count_eq(i+1, self.benefit_plan_no_max, f"{i+1} beneficiaries should be added and active")
+            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i + 1} beneficiaries should be added and active")
 
     def test_delete_beneficiary(self):
         uuid = self.add_beneficiary_return_uuid(self.individual)

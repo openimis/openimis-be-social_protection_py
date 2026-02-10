@@ -64,38 +64,38 @@ service_add_payload_valid_schema = {
     "max_beneficiaries": 20,
     "ceiling_per_beneficiary": "0.00",
     "beneficiary_data_schema": {
-      "$schema": "http://json-schema.org/draft-04/schema#",
-      "properties": {
-        "email": {
-          "type": "string",
-        },
-        "able_bodied": {
-          "type": "boolean",
-        },
-        "number_of_children": {
-          "type": "integer",
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "properties": {
+            "email": {
+                "type": "string",
+            },
+            "able_bodied": {
+                "type": "boolean",
+            },
+            "number_of_children": {
+                "type": "integer",
+            }
         }
-      }
     },
     "json_ext": {
-      'advanced_criteria': {
-        'POTENTIAL': [
-          {
-            'type': 'integer',
-            'field': 'number_of_children',
-            'value': '1',
-            'filter': 'gt'
-          }
-        ],
-        'ACTIVE': [
-          {
-            'type': 'boolean',
-            'field': 'able_bodied',
-            'value': 'False',
-            'filter': 'exact'
-          }
-        ]
-      }
+        'advanced_criteria': {
+            'POTENTIAL': [
+                {
+                    'type': 'integer',
+                    'field': 'number_of_children',
+                    'value': '1',
+                    'filter': 'gt'
+                }
+            ],
+            'ACTIVE': [
+                {
+                    'type': 'boolean',
+                    'field': 'able_bodied',
+                    'value': 'False',
+                    'filter': 'exact'
+                }
+            ]
+        }
     },
     "date_valid_from": "2023-01-01",
     "date_valid_to": "2023-12-31",

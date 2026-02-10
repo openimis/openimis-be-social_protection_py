@@ -47,7 +47,7 @@ def validate_benefit_plan(data, uuid=None):
 def validate_bf_unique_code(code, uuid=None):
     instance = BenefitPlan.objects.filter(code=code, is_deleted=False).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.benefit_plan.code_exists" % {
+        return [{"message": _("social_protection.validation.benefit_plan.code_exists" % {  # noqa: F504
             'code': code
         })}]
     return []
@@ -56,7 +56,7 @@ def validate_bf_unique_code(code, uuid=None):
 def validate_bf_unique_name(name, uuid=None):
     instance = BenefitPlan.objects.filter(name=name, is_deleted=False).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.benefit_plan.name_exists" % {
+        return [{"message": _("social_protection.validation.benefit_plan.name_exists" % {  # noqa: F504
             'name': name
         })}]
     return []
@@ -83,7 +83,7 @@ def validate_project_unique_name(name, benefit_plan_id, uuid=None):
         name=name, benefit_plan__id=benefit_plan_id, is_deleted=False
     ).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.project.name_exists" % {
+        return [{"message": _("social_protection.validation.project.name_exists" % {   # noqa: F504
             'name': name
         })}]
     return []

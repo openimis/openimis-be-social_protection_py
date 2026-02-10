@@ -1,15 +1,10 @@
-import copy
 import json
 import logging
 import uuid
 
-import math
 import pandas as pd
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
-from django.db import models
-from django.db.models import Q, Value, Func, F
-from django.db.models.functions import Concat
 from pandas import DataFrame
 
 from calculation.services import get_calculation_object
@@ -22,7 +17,6 @@ from social_protection.models import (
     Beneficiary,
     BenefitPlanDataUploadRecords,
     GroupBeneficiary,
-    BeneficiaryStatus,
     Project,
 )
 
@@ -36,12 +30,8 @@ from social_protection.validation import (
 from tasks_management.services import UpdateCheckerLogicServiceMixin, CheckerLogicServiceMixin, \
     crud_business_data_builder
 from workflow.systems.base import WorkflowHandler
-from workflow.util import result as WorkflowExecutionResult
 from core.models import User
-from core.services.utils import check_authentication as check_authentication, output_exception, \
-    model_representation, output_result_success
-
-from social_protection.apps import SocialProtectionConfig
+from core.services.utils import output_exception
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +95,11 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
             benefit_plan_id = obj_data.get("benefit_plan_id", None)
 
             if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status):
-                raise ValueError(f"Error creating beneficiary with active status. Benefit plan is already at max active beneficiaries")
+                raise ValueError("Error creating beneficiary with active status. Benefit plan is already at max active beneficiaries")
             return super().create(obj_data)
         except Exception as exc:
             return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
-    
+
     @register_service_signal('beneficiary_service.update')
     def update(self, obj_data):
         try:
@@ -118,7 +108,7 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
             id = obj_data.get('id', None)
 
             if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status, id):
-                raise ValueError(f"Error changing beneficiary to active status. Benefit plan is already at max active beneficiaries")
+                raise ValueError("Error changing beneficiary to active status. Benefit plan is already at max active beneficiaries")
             return super().update(obj_data)
         except Exception as exc:
             return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
@@ -132,13 +122,13 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
         project_id = obj_data['project_id']
         enroll_ids = obj_data.get('ids', [])
         unenroll_ids = Beneficiary.objects.filter(project_id=project_id)\
-                .exclude(id__in=enroll_ids).values_list('id', flat=True)
+            .exclude(id__in=enroll_ids).values_list('id', flat=True)
         with transaction.atomic():
             try:
                 for id in unenroll_ids:
-                    super().update({ 'id': id, 'project_id': None })
+                    super().update({'id': id, 'project_id': None})
                 for id in enroll_ids:
-                    super().update({ 'id': id, 'project_id': project_id })
+                    super().update({'id': id, 'project_id': project_id})
             except Exception as exc:
                 return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
 
@@ -183,7 +173,7 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
             benefit_plan_id = obj_data.get("benefit_plan_id", None)
 
             if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status):
-                raise ValueError(f"Error creating beneficiary with active status. Benefit plan is already at max active beneficiaries")
+                raise ValueError("Error creating beneficiary with active status. Benefit plan is already at max active beneficiaries")
             return super().create(obj_data)
         except Exception as exc:
             return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
@@ -196,7 +186,7 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
             id = obj_data.get('id', None)
 
             if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status, id):
-                raise ValueError(f"Error changing beneficiary to active status. Benefit plan is already at max active beneficiaries")
+                raise ValueError("Error changing beneficiary to active status. Benefit plan is already at max active beneficiaries")
             return super().update(obj_data)
         except Exception as exc:
             return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
@@ -210,13 +200,13 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
         project_id = obj_data['project_id']
         enroll_ids = obj_data.get('ids', [])
         unenroll_ids = GroupBeneficiary.objects.filter(project_id=project_id)\
-                .exclude(id__in=enroll_ids).values_list('id', flat=True)
+            .exclude(id__in=enroll_ids).values_list('id', flat=True)
         with transaction.atomic():
             try:
                 for id in unenroll_ids:
-                    super().update({ 'id': id, 'project_id': None })
+                    super().update({'id': id, 'project_id': None})
                 for id in enroll_ids:
-                    super().update({ 'id': id, 'project_id': project_id })
+                    super().update({'id': id, 'project_id': project_id})
             except Exception as exc:
                 return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
 
@@ -371,9 +361,8 @@ class BeneficiaryImportService:
                 # Uniqueness Check
                 if "uniqueness" in field_properties and field in row:
                     field_validation['validations'][f'{field}_uniqueness'] = {
-                        'success': not unique_validations[field].loc[row.name] 
+                        'success': not unique_validations[field].loc[row.name]
                     }
-                    
 
             validated_dataframe.append(field_validation)
 
@@ -515,9 +504,9 @@ class BeneficiaryImportService:
     def _synchronize_beneficiary(self, benefit_plan, upload_id):
         unique_uuids = list((
             Beneficiary.objects
-                .filter(benefit_plan=benefit_plan, individual__individualdatasource__upload_id=upload_id)
-                .values_list('id', flat=True)
-                .distinct()
+            .filter(benefit_plan=benefit_plan, individual__individualdatasource__upload_id=upload_id)
+            .values_list('id', flat=True)
+            .distinct()
         ))
         beneficiaries = Beneficiary.objects.filter(
             id__in=unique_uuids
@@ -548,7 +537,6 @@ class BeneficiaryTaskCreatorService:
     @register_service_signal('socialProtection.update_task')
     @transaction.atomic()
     def _create_task(self, benefit_plan, upload_id, business_event):
-        from social_protection.apps import SocialProtectionConfig
         from tasks_management.services import TaskService
         from tasks_management.apps import TasksManagementConfig
         from tasks_management.models import Task
@@ -631,5 +619,3 @@ class ProjectService(BaseService):
             return output_exception(
                 model_name=self.OBJECT_TYPE.__name__, method="undo_delete", exception=exc
             )
-
-

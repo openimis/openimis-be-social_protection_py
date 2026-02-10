@@ -56,7 +56,7 @@ from location.models import extend_allowed_locations, Location
 
 
 def patch_details(beneficiary_df: pd.DataFrame):
-    # Transform extension to DF columns 
+    # Transform extension to DF columns
     df_unfolded = pd.json_normalize(beneficiary_df['json_ext'])
     # Merge unfolded DataFrame with the original DataFrame
     df_final = pd.concat([beneficiary_df, df_unfolded], axis=1)
@@ -102,7 +102,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         dateValidTo__Lte=graphene.DateTime(),
         parent_location=graphene.String(),
         parent_location_level=graphene.Int(),
-        village_or_child_of=graphene.Int(), # improved version of parent_location + parent_location_level query
+        village_or_child_of=graphene.Int(),  # improved version of parent_location + parent_location_level query
         applyDefaultValidityFilter=graphene.Boolean(),
         client_mutation_id=graphene.String(),
         customFilters=graphene.List(of_type=graphene.String),
@@ -114,7 +114,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         dateValidTo__Lte=graphene.DateTime(),
         parent_location=graphene.String(),
         parent_location_level=graphene.Int(),
-        village_or_child_of=graphene.Int(), # improved version of parent_location + parent_location_level query
+        village_or_child_of=graphene.Int(),  # improved version of parent_location + parent_location_level query
         applyDefaultValidityFilter=graphene.Boolean(),
         client_mutation_id=graphene.String(),
         customFilters=graphene.List(of_type=graphene.String),
@@ -408,7 +408,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
             )
 
         filters = _build_filters(info, **kwargs)
-        
+
         parent_location = kwargs.get('parent_location')
         parent_location_level = kwargs.get('parent_location_level')
         if parent_location is not None and parent_location_level is not None:
@@ -425,7 +425,6 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         query = _annotate_is_eligible(query, eligible_group_uuids, eligibility_check_performed)
 
         return gql_optimizer.query(query, info)
-
 
     def resolve_awaiting_beneficiary(self, info, **kwargs):
         filters = append_validity_filter(**kwargs)
@@ -604,7 +603,6 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         return gql_optimizer.query(query, info)
 
 
-
 class Mutation(graphene.ObjectType):
     create_benefit_plan = CreateBenefitPlanMutation.Field()
     update_benefit_plan = UpdateBenefitPlanMutation.Field()
@@ -625,4 +623,3 @@ class Mutation(graphene.ObjectType):
     undo_delete_project = UndoDeleteProjectMutation.Field()
     enroll_project = ProjectEnrollmentMutation.Field()
     enroll_group_project = ProjectGroupEnrollmentMutation.Field()
-

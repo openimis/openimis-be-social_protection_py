@@ -1,7 +1,7 @@
 import json
 from core.models import User
 from core.models.openimis_graphql_test_case import BaseTestContext
-from core.test_helpers import create_test_interactive_user
+from core.test_helpers import create_test_interactive_user, create_enrolment_officer_role
 from social_protection.tests.test_helpers import (
     PatchedOpenIMISGraphQLTestCase,
     find_or_create_activity,
@@ -9,7 +9,6 @@ from social_protection.tests.test_helpers import (
 )
 from social_protection.models import Project, ProjectMutation
 from location.test_helpers import create_test_village
-from django.contrib.auth import get_user_model
 import uuid
 
 
@@ -17,14 +16,14 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.filter(username='admin', i_user__isnull=False).first()
+        cls.user = User.objects.filter(username='Admin', i_user__isnull=False).first()
         if not cls.user:
-            cls.user = create_test_interactive_user(username='admin')
+            cls.user = create_test_interactive_user(username='Admin')
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
         username = cls.user.username
 
         cls.test_officer = create_test_interactive_user(
-            username="projectUserNoRight", roles=[1])  # 1 is a generic role with no project access
+            username="projectUserNoRight", roles=[create_enrolment_officer_role().id])  # 1 is a generic role with no project access
         cls.test_officer_token = BaseTestContext(user=cls.test_officer).get_jwt()
 
         # Required dependencies
@@ -261,7 +260,6 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         data = json.loads(response.content)['data']['createProject']
         self.assert_mutation_error(data['internalId'], self.user_token, "authentication_required")
 
-
     def test_create_project_mutation_missing_required_field(self):
         mutation = """
         mutation {
@@ -285,7 +283,6 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertEqual(response.status_code, 400)
         content = json.loads(response.content)
         self.assertIn("errors", content)
-
 
     def test_update_project_mutation_success(self):
         mutation = """

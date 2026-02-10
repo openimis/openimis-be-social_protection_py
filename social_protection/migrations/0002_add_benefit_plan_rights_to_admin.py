@@ -14,6 +14,7 @@ def remove_rights(apps, schema_editor):
     for right_id in benefit_plan_rights:
         remove_role_right_for_system(imis_administrator_system, right_id, apps)
 
+
 class Migration(migrations.Migration):
     dependencies = [
         ('social_protection', '0001_initial')

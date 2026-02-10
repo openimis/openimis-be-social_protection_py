@@ -1,7 +1,8 @@
 import graphene as graphene
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import transaction
+from django.utils.translation import gettext as _
 
 from core.gql.gql_mutations.base_mutation import BaseHistoryModelCreateMutationMixin, BaseMutation, \
     BaseHistoryModelUpdateMutationMixin, BaseHistoryModelDeleteMutationMixin
@@ -443,6 +444,7 @@ class DeleteGroupBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
 
+
 class CreateProjectInputType(OpenIMISMutation.Input):
     benefit_plan_id = graphene.ID(required=True)
     name = graphene.String(required=True)
@@ -503,6 +505,7 @@ class UpdateProjectInputType(OpenIMISMutation.Input):
     target_beneficiaries = graphene.Int(required=False)
     working_days = graphene.Int(required=False)
     allows_multiple_enrollments = graphene.Boolean(required=False)
+
 
 class UpdateProjectMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
     _mutation_class = "UpdateProjectMutation"

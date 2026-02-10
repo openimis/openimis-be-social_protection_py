@@ -1,4 +1,3 @@
-import copy
 
 from django.test import TestCase
 
@@ -13,7 +12,6 @@ from core.test_helpers import LogInHelper
 from social_protection.tests.test_helpers import (
     create_benefit_plan, create_group, create_project,
 )
-from datetime import datetime
 
 
 class GroupBeneficiaryServiceTest(TestCase):
@@ -43,7 +41,7 @@ class GroupBeneficiaryServiceTest(TestCase):
         cls.group = create_group(cls.user.username)
         cls.group2 = create_group(cls.user.username)
         cls.group3 = create_group(cls.user.username)
-    
+
     def add_beneficiary_return_result(self, group: Group, benefit_plan: BenefitPlan = None, status="POTENTIAL"):
         benefit_plan = benefit_plan or self.benefit_plan
         payload = {
@@ -54,7 +52,7 @@ class GroupBeneficiaryServiceTest(TestCase):
         }
         result = self.service.create(payload)
         return result
-        
+
     def add_beneficiary_return_uuid(self, group: Group, benefit_plan: BenefitPlan = None, status="POTENTIAL"):
         result = self.add_beneficiary_return_result(group, benefit_plan, status)
         self.assertTrue(result.get('success', False), result.get('detaul', "No details provided"))
@@ -65,7 +63,7 @@ class GroupBeneficiaryServiceTest(TestCase):
         self.assertEqual(query.count(), 1)
         if with_status:
             self.assertEqual(query.first().status, with_status)
-        
+
     def check_active_beneficiaries_count_eq(self, count, benefit_plan, msg=None):
         active_beneficiaries = self.query_all.filter(benefit_plan_id=benefit_plan.id, status="ACTIVE").distinct()
         self.assertEqual(active_beneficiaries.count(), count, msg)
@@ -84,13 +82,13 @@ class GroupBeneficiaryServiceTest(TestCase):
         self.assertFalse(result.get('success', True), "Benefit plan's 'max active beneficiaries' was not enforced")
         self.assertEqual(self.query_all.filter(group__code=self.group3.code).count(), 0)
         self.check_active_beneficiaries_count_eq(1, self.benefit_plan, "Second active beneficiary addition should have been blocked")
-        
+
         self.assertEqual(self.benefit_plan_no_max.max_beneficiaries, None)
 
         for i, group in enumerate([self.group, self.group2]):
             uuid = self.add_beneficiary_return_uuid(group, self.benefit_plan_no_max, status="ACTIVE")
             self.check_beneficiary_exists(uuid, with_status="ACTIVE")
-            self.check_active_beneficiaries_count_eq(i+1, self.benefit_plan_no_max, f"{i+1} beneficiaries should be added and active")
+            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i + 1} beneficiaries should be added and active")
 
     def test_update_group_beneficiary(self):
         def create_and_update_to_active(group, benefit_plan):
@@ -102,7 +100,7 @@ class GroupBeneficiaryServiceTest(TestCase):
                 'benefit_plan_id': benefit_plan.id
             }
             return self.service.update(update_payload), uuid
-        
+
         self.assertEqual(self.benefit_plan.max_beneficiaries, 1)
 
         result, uuid = create_and_update_to_active(self.group, self.benefit_plan)
@@ -137,7 +135,7 @@ class GroupBeneficiaryServiceTest(TestCase):
             result, uuid = create_and_update_to_active(group, self.benefit_plan_no_max)
             self.assertTrue(result.get('success', False), result.get('detail', "No details provided"))
             self.check_beneficiary_exists(uuid, with_status="ACTIVE")
-            self.check_active_beneficiaries_count_eq(i+1, self.benefit_plan_no_max, f"{i+1} beneficiaries should be added and active")
+            self.check_active_beneficiaries_count_eq(i + 1, self.benefit_plan_no_max, f"{i + 1} beneficiaries should be added and active")
 
     def test_delete_group_beneficiary(self):
         uuid = self.add_beneficiary_return_uuid(self.group)
