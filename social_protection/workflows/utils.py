@@ -54,13 +54,13 @@ class BasePythonWorkflowExecutor(metaclass=ABCMeta):
         3. 'id' is field automatically added to DataFrame which is used for upload.
         4. If action is data upload then 'ID' unique identifier is required as well.
         """
-        
+
         df_headers = set(self.df.columns)
         schema = json.loads(self.schema) if isinstance(self.schema, str) else self.schema
         schema_properties = set(schema.get('properties', {}).keys())
         schema_properties.update(['recipient_info', 'group_code', 'individual_role'])
         required_headers = set(SocialProtectionConfig.beneficiary_base_fields)
-        
+
         if is_update:
             required_headers.add('ID')
 
@@ -104,14 +104,14 @@ class SqlProcedurePythonWorkflow(BasePythonWorkflowExecutor):
 
     def _execute_sql_logic(self, sql_func: str, params: Iterable):
         with connection.cursor() as cursor:
-            current_upload_id = self.upload_uuid
-            userUUID = self.user_uuid
-            benefitPlan = self.benefit_plan_uuid
-            accepted = self.accepted
+            # current_upload_id = self.upload_uuid
+            # userUUID = self.user_uuid
+            # benefitPlan = self.benefit_plan_uuid
+            # accepted = self.accepted
             # The SQL logic here needs to be carefully translated or executed directly
             # The provided SQL is complex and may require breaking down into multiple steps or ORM operations
             cursor.execute(
-                sql_func, params #[current_upload_id, userUUID, benefitPlan, accepted]
+                sql_func, params  # [current_upload_id, userUUID, benefitPlan, accepted]
             )
             # Process the cursor results or handle exceptions
 
@@ -149,12 +149,12 @@ class MakerCheckerPythonWorkflowExecutor(SqlProcedurePythonWorkflow, metaclass=A
                 # All records are fine, execute SQL logic
                 self._execute_sql_logic(sql)
         except ProgrammingError as e:
-            import traceback
+            import traceback  # noqa: F401
             # The exception on procedure execution is handled by the procedure itself.
             logger.log(logging.ERROR, F'Error during beneficiary upload workflow, details:\n{str(e)}')
             return
         except Exception as e:
-            import traceback
+            import traceback  # noqa: F401
             logger.log(logging.ERROR, F'Unexpected during beneficiary upload workflow, details:\n{str(e)}')
             raise PythonWorkflowHandlerException(str(e))
 

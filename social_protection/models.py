@@ -1,5 +1,3 @@
-from django.conf import settings
-from django.contrib.auth.models import AnonymousUser
 from django.db import models
 from django.db.models import Func
 from django.utils.translation import gettext as _
@@ -103,7 +101,7 @@ class Beneficiary(core_models.HistoryBusinessModel):
 
     def __str__(self):
         return f'{self.individual.first_name} {self.individual.last_name}'
-    
+
     @classmethod
     def get_queryset(cls, queryset, user):
         if queryset is None:
@@ -112,7 +110,7 @@ class Beneficiary(core_models.HistoryBusinessModel):
         individuals = Individual.objects.filter(
             id__in=queryset.values('individual_id')
         ).distinct()
-    
+
         individual_queryset = Individual.get_queryset(individuals, user)
         return queryset.filter(individual__in=individual_queryset)
 
@@ -223,7 +221,7 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
                 raise ValidationError(_("Group beneficiary and project must belong to the same program."))
 
         super().clean()
-    
+
     @classmethod
     def get_queryset(cls, queryset, user):
         if queryset is None:
@@ -232,7 +230,7 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
         groups = Group.objects.filter(
             id__in=queryset.values('group_id')
         ).distinct()
-    
+
         group_queryset = Group.get_queryset(groups, user)
         return queryset.filter(group__in=group_queryset)
 

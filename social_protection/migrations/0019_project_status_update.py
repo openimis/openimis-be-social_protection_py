@@ -7,9 +7,11 @@ def forwards(apps, schema_editor):
     Project = apps.get_model("social_protection", "Project")
     Project.objects.filter(status="IN PROGRESS").update(status="IN_PROGRESS")
 
+
 def backwards(apps, schema_editor):
     Project = apps.get_model("social_protection", "Project")
     Project.objects.filter(status="IN_PROGRESS").update(status="IN PROGRESS")
+
 
 class Migration(migrations.Migration):
 

@@ -89,7 +89,7 @@ DO $$
                     AND loc."LocationCode" = ds."Json_ext"->>'location_code'
                     AND loc."LocationType"='V'
                     AND loc."ValidityTo" IS NULL
-            WHERE ds.upload_id=current_upload_id 
+            WHERE ds.upload_id=current_upload_id
                 AND ds.individual_id is null
                 AND ds."isDeleted"=False
             RETURNING "UUID", "Json_ext"  -- also return the Json_ext
@@ -198,7 +198,7 @@ DO $$
                     AND loc."LocationCode" = ds."Json_ext"->>'location_code'
                     AND loc."LocationType"='V'
                     AND loc."ValidityTo" IS NULL
-            WHERE ds.upload_id=current_upload_id 
+            WHERE ds.upload_id=current_upload_id
                 AND ds.individual_id is null
                 AND ds."isDeleted"=False
             RETURNING "UUID", "Json_ext"  -- also return the Json_ext

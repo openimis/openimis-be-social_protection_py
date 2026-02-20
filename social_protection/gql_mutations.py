@@ -445,6 +445,7 @@ class DeleteGroupBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
 
+
 class CreateProjectInputType(OpenIMISMutation.Input):
     benefit_plan_id = graphene.ID(required=True)
     name = graphene.String(required=True)
@@ -505,6 +506,7 @@ class UpdateProjectInputType(OpenIMISMutation.Input):
     target_beneficiaries = graphene.Int(required=False)
     working_days = graphene.Int(required=False)
     allows_multiple_enrollments = graphene.Boolean(required=False)
+
 
 class UpdateProjectMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
     _mutation_class = "UpdateProjectMutation"

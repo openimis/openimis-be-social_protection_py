@@ -1,23 +1,19 @@
 import json
-from core.models import User
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase, BaseTestContext
-from core.test_helpers import create_test_interactive_user
+from core.test_helpers import create_test_interactive_user, create_enrolment_officer_role
 from social_protection.tests.test_helpers import find_or_create_activity
-from django.contrib.auth import get_user_model
 
 
 class ActivitiesGQLTest(openIMISGraphQLTestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.filter(username='admin', i_user__isnull=False).first()
-        if not cls.user:
-            cls.user=create_test_interactive_user(username='admin')
+        cls.user = create_test_interactive_user(username='Admin')
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
         username = cls.user.username
 
         cls.med_enroll_officer = create_test_interactive_user(
-            username="medEONoRight", roles=[1]) # 1 is the med enrollment officer role
+            username="medEONoRight", roles=[create_enrolment_officer_role().id])
         cls.med_enroll_officer_token = BaseTestContext(user=cls.med_enroll_officer).get_jwt()
 
         cls.activity_1 = find_or_create_activity("Nutrition Outreach", username)
@@ -79,6 +75,3 @@ class ActivitiesGQLTest(openIMISGraphQLTestCase):
         )
         content = json.loads(response.content)
         self.assertEqual(content['errors'][0]['message'], 'Unauthorized')
-
-
-

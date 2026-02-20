@@ -5,7 +5,6 @@ from graphene import ObjectType
 from graphene_django import DjangoObjectType
 import graphene_django_optimizer as gql_optimizer
 import django_filters
-from graphene_django.filter import DjangoFilterConnectionField
 
 from contribution_plan.models import PaymentPlan
 from core import prefix_filterset, ExtendedConnection
@@ -188,6 +187,7 @@ class BeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMixin):
             Q(individual__location__id__in=village_matches)
         )
 
+
 class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
     is_eligible = graphene.Boolean()
@@ -260,6 +260,7 @@ class GroupBeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMi
             Q(group__id__in=head_matches) |
             Q(group__location__id__in=village_matches)
         )
+
 
 class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
@@ -391,6 +392,7 @@ class ProjectFilter(django_filters.FilterSet):
             "is_deleted": ["exact"],
             "version": ["exact"],
         }
+
 
 class ProjectGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
