@@ -76,7 +76,17 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             'code': 'GGQLTest',
             'type': 'GROUP'
         })
-        cls.individual_2child, cls.group_2child, gi = create_group_with_individual(cls.user.username)
+        cls.individual_2child, cls.group_2child, gi = create_group_with_individual(
+            cls.user.username,
+            individual_override={
+                'first_name': 'Alice',
+                'last_name': 'Zulu',
+                'dob': '2000-01-01',
+                'json_ext': {
+                    'number_of_children': 2
+                }
+            }
+        )
         child1 = create_individual(cls.user.username, payload_override={
             'first_name': 'Child1',
             'json_ext': {
@@ -89,13 +99,15 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 'number_of_children': 0
             }
         })
-        add_individual_to_group(cls.user.username, child1, cls.group_2child)
-        add_individual_to_group(cls.user.username, child2, cls.group_2child)
+        add_individual_to_group(cls.user.username, child1, cls.group_2child, is_head=False)
+        add_individual_to_group(cls.user.username, child2, cls.group_2child, is_head=False)
 
         cls.individual_1child, cls.group_1child, __ = create_group_with_individual(
             cls.user.username,
             individual_override={
-                'first_name': 'OneChild',
+                'first_name': 'Bob',
+                'last_name': 'Yankee',
+                'dob': '1990-01-01',
                 'json_ext': {
                     'number_of_children': 1
                 }
@@ -104,7 +116,9 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         cls.individual, cls.group_0child, __ = create_group_with_individual(
             cls.user.username,
             individual_override={
-                'first_name': 'NoChild',
+                'first_name': 'Charlie',
+                'last_name': 'Xray',
+                'dob': '1980-01-01',
                 'json_ext': {
                     'number_of_children': 0
                 }
@@ -865,3 +879,129 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         ).first()
         self.assertIsNotNone(time_entry)
         self.assertEqual(time_entry.percent_complete, 50)
+
+    def test_query_group_beneficiary_order_by_head_first_name(self):
+        """Test ordering group beneficiaries by head's first name.
+
+        Uses existing groups from setUpClass:
+        - group_2child: head first_name='Alice'
+        - group_1child: head first_name='Bob'
+        - group_0child: head first_name='Charlie'
+        """
+        query_str = f"""
+            query {{
+              groupBeneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                orderBy: ["head_first_name"],
+                isDeleted: false,
+                first: 10
+              ) {{
+                edges {{
+                  node {{
+                    group {{
+                      code
+                      head {{
+                        firstName
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        first_names = [e['node']['group']['head']['firstName'] for e in data['edges']]
+        self.assertEqual(first_names, ['Alice', 'Bob', 'Charlie'])
+
+        # Descending order
+        query_str = query_str.replace('orderBy: ["head_first_name"]', 'orderBy: ["-head_first_name"]')
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        first_names = [e['node']['group']['head']['firstName'] for e in data['edges']]
+        self.assertEqual(first_names, ['Charlie', 'Bob', 'Alice'])
+
+    def test_query_group_beneficiary_order_by_head_last_name(self):
+        """Test ordering group beneficiaries by head's last name.
+
+        Uses existing groups from setUpClass:
+        - group_0child: head last_name='Xray'
+        - group_1child: head last_name='Yankee'
+        - group_2child: head last_name='Zulu'
+        """
+        query_str = f"""
+            query {{
+              groupBeneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                orderBy: ["head_last_name"],
+                isDeleted: false,
+                first: 10
+              ) {{
+                edges {{
+                  node {{
+                    group {{
+                      code
+                      head {{
+                        lastName
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        last_names = [e['node']['group']['head']['lastName'] for e in data['edges']]
+        self.assertEqual(last_names, ['Xray', 'Yankee', 'Zulu'])
+
+    def test_query_group_beneficiary_order_by_head_dob(self):
+        """Test ordering group beneficiaries by head's date of birth.
+
+        Uses existing groups from setUpClass:
+        - group_0child: head dob='1980-01-01'
+        - group_1child: head dob='1990-01-01'
+        - group_2child: head dob='2000-01-01'
+        """
+        query_str = f"""
+            query {{
+              groupBeneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                orderBy: ["head_dob"],
+                isDeleted: false,
+                first: 10
+              ) {{
+                edges {{
+                  node {{
+                    group {{
+                      code
+                      head {{
+                        dob
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        dobs = [e['node']['group']['head']['dob'] for e in data['edges']]
+        self.assertEqual(dobs, ['1980-01-01', '1990-01-01', '2000-01-01'])
+
+        # Descending order (youngest first)
+        query_str = query_str.replace('orderBy: ["head_dob"]', 'orderBy: ["-head_dob"]')
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        dobs = [e['node']['group']['head']['dob'] for e in data['edges']]
+        self.assertEqual(dobs, ['2000-01-01', '1990-01-01', '1980-01-01'])

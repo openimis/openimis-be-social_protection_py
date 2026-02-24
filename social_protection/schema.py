@@ -2,8 +2,9 @@ import graphene
 import pandas as pd
 
 from django.contrib.auth.models import AnonymousUser
-from django.db.models import Q, Case, When, BooleanField, Value
+from django.db.models import Q, Case, When, BooleanField, Value, OuterRef, Subquery
 from django.core.exceptions import PermissionDenied
+from individual.models import GroupIndividual
 
 from django.utils.translation import gettext as _
 from core.custom_filters import CustomFilterWizardStorage
@@ -425,6 +426,18 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
 
         eligible_group_uuids, eligibility_check_performed = _get_eligible_group_uuids(query, info, **kwargs)
         query = _annotate_is_eligible(query, eligible_group_uuids, eligibility_check_performed)
+
+        # Annotate head fields for ordering support
+        head_subquery = GroupIndividual.objects.filter(
+            group_id=OuterRef('group_id'),
+            role=GroupIndividual.Role.HEAD,
+            is_deleted=False
+        )
+        query = query.annotate(
+            head_first_name=Subquery(head_subquery.values('individual__first_name')[:1]),
+            head_last_name=Subquery(head_subquery.values('individual__last_name')[:1]),
+            head_dob=Subquery(head_subquery.values('individual__dob')[:1]),
+        )
 
         return gql_optimizer.query(query, info)
 
