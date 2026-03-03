@@ -11,7 +11,10 @@ from social_protection.tests.test_helpers import (
     add_individual_to_benefit_plan,
     create_project,
 )
-from social_protection.models import BeneficiaryProjectTimeEntry, Beneficiary
+from social_protection.models import (
+    BeneficiaryProjectTimeEntry, Beneficiary, BeneficiaryProjectEnrollment,
+    BeneficiaryStatus,
+)
 from social_protection.services import BeneficiaryService
 from social_protection.apps import SocialProtectionConfig
 from core.models import Role, RoleRight, UserRole
@@ -388,14 +391,19 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             self.user.username,
         )
 
-        # Link the project to the ACTIVE beneficiary
-        self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=project)
+        # Create enrollment for the ACTIVE beneficiary
+        beneficiary = self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary.status != BeneficiaryStatus.ACTIVE:
+            beneficiary.status = BeneficiaryStatus.ACTIVE
+            beneficiary.save(username=self.user.username)
+        enrollment = BeneficiaryProjectEnrollment(beneficiary=beneficiary, project=project)
+        enrollment.save(user=self.user)
 
-        # Query with projectId filter
+        # Query with enrolled_in_project filter
         query_str = f"""
             query {{
               beneficiary(
-                project_Id: "{project.uuid}",
+                enrolledInProject: "{project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -406,9 +414,11 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                     individual {{
                       firstName
                     }}
-                    project {{
-                      id
-                      name
+                    projectEnrollments {{
+                      project {{
+                        id
+                        name
+                      }}
                     }}
                     status
                   }}
@@ -426,7 +436,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         returned_node = beneficiary_data['edges'][0]['node']
         self.assertEqual(returned_node['individual']['firstName'], self.individual.first_name)
         self.assertEqual(returned_node['status'], 'ACTIVE')
-        self.assertEqual(returned_node['project']['name'], project.name)
+        self.assertEqual(returned_node['projectEnrollments'][0]['project']['name'], project.name)
 
     def test_query_beneficiary_village_or_child_of_filter(self):
         child_village = create_test_village({'code': 'BeneV1', 'name': 'Beneficiary Village 1'})
@@ -517,7 +527,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         data = json.loads(response.content)['data']['enrollProject']
         self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
 
-        # Test for user with enrollment permission (positive case)
+        # Test enrollment with authorized user
         response = self.query(
             query_str,
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.enroll_user_token}"}
@@ -526,10 +536,13 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         data = json.loads(response.content)['data']['enrollProject']
         self.assert_mutation_success(data['internalId'], self.enroll_user_token)
 
-        # Verify that expected project beneficiary is persisted in the db
-        beneficiary.refresh_from_db()
-        self.assertIsNotNone(beneficiary.project)
-        self.assertEqual(beneficiary.project.id, project.id)
+        # Verify that expected project enrollment is persisted in the db
+        enrollment = BeneficiaryProjectEnrollment.objects.filter(
+            beneficiary=beneficiary,
+            project=project,
+            is_deleted=False
+        ).first()
+        self.assertIsNotNone(enrollment)
 
     def test_query_beneficiary_search(self):
         # search matches on first name
@@ -687,15 +700,21 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             allows_multiple_enrollments=False,
         )
 
-        # Assign self.individual_2child to the exclusive project
-        self.individual_2child.beneficiary_set\
-            .filter(benefit_plan=self.benefit_plan)\
-            .update(project=exclusive_project)
+        # Enroll self.individual_2child in the exclusive project
+        beneficiary_2child = self.individual_2child.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary_2child.status != BeneficiaryStatus.ACTIVE:
+            beneficiary_2child.status = BeneficiaryStatus.ACTIVE
+            beneficiary_2child.save(username=self.user.username)
+        enrollment_2child = BeneficiaryProjectEnrollment(beneficiary=beneficiary_2child, project=exclusive_project)
+        enrollment_2child.save(user=self.user)
 
-        # Assign self.individual_1child to the multi project
-        self.individual_1child.beneficiary_set\
-            .filter(benefit_plan=self.benefit_plan)\
-            .update(project=multi_project)
+        # Enroll self.individual_1child in the multi project
+        beneficiary_1child = self.individual_1child.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary_1child.status != BeneficiaryStatus.ACTIVE:
+            beneficiary_1child.status = BeneficiaryStatus.ACTIVE
+            beneficiary_1child.save(username=self.user.username)
+        enrollment_1child = BeneficiaryProjectEnrollment(beneficiary=beneficiary_1child, project=multi_project)
+        enrollment_1child.save(user=self.user)
 
         # Query using multi-enrollment project filter — should exclude 2child,
         # include 1child & no-project
@@ -703,7 +722,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             query {{
               beneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{multi_project.id}",
+                eligibleForProject: "{multi_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -732,7 +751,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             query {{
               beneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{exclusive_project.id}",
+                eligibleForProject: "{exclusive_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -763,23 +782,27 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             self.user.username,
             allows_multiple_enrollments=True,
         )
-        self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=project)
+        beneficiary = self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary.status != BeneficiaryStatus.ACTIVE:
+            beneficiary.status = BeneficiaryStatus.ACTIVE
+            beneficiary.save(username=self.user.username)
+        enrollment = BeneficiaryProjectEnrollment(beneficiary=beneficiary, project=project)
+        enrollment.save(user=self.user)
 
-        beneficiary = project.beneficiaries.first()
         BeneficiaryProjectTimeEntry(
-            beneficiary=beneficiary, day_number=1, percent_complete=25
+            enrollment=enrollment, day_number=1, percent_complete=25
         ).save(username=self.user.username)
         BeneficiaryProjectTimeEntry(
-            beneficiary=beneficiary, day_number=2, percent_complete=80
+            enrollment=enrollment, day_number=2, percent_complete=80
         ).save(username=self.user.username)
         BeneficiaryProjectTimeEntry(
-            beneficiary=beneficiary, day_number=3, percent_complete=100
+            enrollment=enrollment, day_number=3, percent_complete=100
         ).save(username=self.user.username)
 
         query_str = f"""
         query {{
           beneficiary(
-            project_Id: "{project.uuid}",
+            enrolledInProject: "{project.id}",
             isDeleted: false,
             first: 10
           ) {{
@@ -789,14 +812,16 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 individual {{
                   firstName
                 }}
-                project {{
-                  id
-                  name
-                }}
-                projectTimeEntries {{
-                  id
-                  dayNumber
-                  percentComplete
+                projectEnrollments {{
+                  project {{
+                    id
+                    name
+                  }}
+                  timeEntries {{
+                    id
+                    dayNumber
+                    percentComplete
+                  }}
                 }}
               }}
             }}
@@ -817,10 +842,10 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
 
         # Verify basic beneficiary info
         self.assertEqual(node['individual']['firstName'], self.individual.first_name)
-        self.assertEqual(node['project']['name'], project.name)
+        self.assertEqual(node['projectEnrollments'][0]['project']['name'], project.name)
 
-        # Verify projectTimeEntries
-        time_entries = node['projectTimeEntries']
+        # Verify time entries
+        time_entries = node['projectEnrollments'][0]['timeEntries']
         self.assertEqual(len(time_entries), 3)
 
         # Check order and values
@@ -840,16 +865,21 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             individual=self.individual,
             benefit_plan=self.benefit_plan
         ).first()
-        beneficiary.project = project
-        beneficiary.save(user=self.user)
+        if beneficiary.status != BeneficiaryStatus.ACTIVE:
+            beneficiary.status = BeneficiaryStatus.ACTIVE
+            beneficiary.save(username=self.user.username)
+        enrollment = BeneficiaryProjectEnrollment(
+            beneficiary=beneficiary,
+            project=project
+        )
+        enrollment.save(user=self.user)
 
         query_str = f'''
             mutation {{
               bulkUpdateBeneficiaryTimeEntries(
                 input: {{
-                  projectId: "{str(project.id)}"
                   timeEntries: [{{
-                    beneficiaryId: "{str(beneficiary.id)}"
+                    enrollmentId: "{str(enrollment.id)}"
                     dayNumber: 1
                     percentComplete: 50
                   }}]
@@ -876,7 +906,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         data = json.loads(response.content)['data']['bulkUpdateBeneficiaryTimeEntries']
         self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
 
-        # Test for user with time entry permission
+        # Test time entry update with authorized user
         response = self.query(
             query_str,
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.time_entry_user_token}"}
@@ -887,7 +917,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
 
         # Verify that expected time entry is persisted in the db
         time_entry = BeneficiaryProjectTimeEntry.objects.filter(
-            beneficiary=beneficiary,
+            enrollment=enrollment,
             day_number=1
         ).first()
         self.assertIsNotNone(time_entry)

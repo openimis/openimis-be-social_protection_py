@@ -1,12 +1,17 @@
 import copy
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from individual.models import Group
 
-from social_protection.models import BenefitPlan, GroupBeneficiary, GroupBeneficiaryProjectTimeEntry
-from social_protection.services import GroupBeneficiaryService
+from social_protection.models import (
+    BenefitPlan, GroupBeneficiary,
+    GroupBeneficiaryProjectTimeEntry,
+    GroupBeneficiaryProjectEnrollment,
+)
+from social_protection.services import GroupBeneficiaryService, ProjectEnrollmentService
 from social_protection.tests.data import (
     service_beneficiary_add_payload, service_beneficiary_update_status_active_payload,
 )
@@ -149,45 +154,81 @@ class GroupBeneficiaryServiceTest(TestCase):
         self.assertEqual(query.count(), 0)
 
     def test_enroll_project(self):
-        uuid1 = self.add_beneficiary_return_uuid(self.group, self.benefit_plan_no_max)
-        uuid2 = self.add_beneficiary_return_uuid(self.group2, self.benefit_plan_no_max)
+        uuid1 = self.add_beneficiary_return_uuid(
+            self.group, self.benefit_plan_no_max, status="ACTIVE"
+        )
+        uuid2 = self.add_beneficiary_return_uuid(
+            self.group2, self.benefit_plan_no_max, status="ACTIVE"
+        )
 
         project = create_project(
             'test enrollment project',
-            self.benefit_plan,
+            self.benefit_plan_no_max,
             self.user.username,
         )
+
+        enrollment_service = ProjectEnrollmentService(self.user, ProjectEnrollmentService.GROUP)
 
         payload = {
             'ids': [uuid1, uuid2],
             'project_id': str(project.id),
         }
 
-        self.service.enroll_project(payload)
+        enrollment_service.enroll_project(payload)
 
-        # Check that both beneficiaries are enrolled into the test project
-        beneficiaries = GroupBeneficiary.objects.filter(id__in=[uuid1, uuid2])
-        self.assertEqual(beneficiaries.count(), 2)
-        for beneficiary in beneficiaries:
-            self.assertEqual(beneficiary.project_id, project.id)
-            self.assertEqual(beneficiary.benefit_plan_id, self.benefit_plan_no_max.id)
+        # Check that both group beneficiaries are enrolled into the test project via enrollment records
+        enrollments = GroupBeneficiaryProjectEnrollment.objects.filter(
+            project_id=project.id,
+            is_deleted=False
+        )
+        self.assertEqual(enrollments.count(), 2)
+        enrolled_beneficiary_ids = set(str(e.group_beneficiary_id) for e in enrollments)
+        self.assertEqual(enrolled_beneficiary_ids, {uuid1, uuid2})
 
         payload = {
             'ids': [uuid1],
             'project_id': str(project.id),
         }
 
-        self.service.enroll_project(payload)
+        enrollment_service.enroll_project(payload)
 
-        # Check that only the first beneficiary is enrolled into the test project
-        beneficiaries = GroupBeneficiary.objects.filter(project_id=project.id)
-        self.assertEqual(beneficiaries.count(), 1)
-        beneficiary = beneficiaries.first()
-        self.assertEqual(str(beneficiary.id), uuid1)
+        # Check that only the first group beneficiary is enrolled into the test project
+        enrollments = GroupBeneficiaryProjectEnrollment.objects.filter(
+            project_id=project.id,
+            is_deleted=False
+        )
+        self.assertEqual(enrollments.count(), 1)
+        enrollment = enrollments.first()
+        self.assertEqual(str(enrollment.group_beneficiary_id), uuid1)
+
+        # Verify enrolling in another non-exclusive project doesn't unenroll from the first
+        project2 = create_project(
+            'second non-exclusive project',
+            self.benefit_plan_no_max,
+            self.user.username,
+            allows_multiple_enrollments=True,
+        )
+        # Make the first project also non-exclusive
+        project.allows_multiple_enrollments = True
+        project.save(user=self.user)
+
+        enrollment_service.enroll_project({
+            'ids': [uuid1],
+            'project_id': str(project2.id),
+        })
+
+        # Verify group beneficiary is enrolled in both projects
+        all_enrollments = GroupBeneficiaryProjectEnrollment.objects.filter(
+            group_beneficiary_id=uuid1,
+            is_deleted=False
+        )
+        self.assertEqual(all_enrollments.count(), 2)
+        enrolled_project_ids = set(e.project_id for e in all_enrollments)
+        self.assertEqual(enrolled_project_ids, {project.id, project2.id})
 
 
 class GroupBeneficiaryTimeEntryServiceTest(TestCase):
-    """Test GroupBeneficiaryService.bulk_update_time_entries"""
+    """Test ProjectEnrollmentService.bulk_update_time_entries for GROUP type"""
 
     @classmethod
     def setUpClass(cls):
@@ -208,60 +249,65 @@ class GroupBeneficiaryTimeEntryServiceTest(TestCase):
         cls.individual1, cls.group1, _ = create_group_with_individual(cls.user.username)
         cls.individual2, cls.group2, _ = create_group_with_individual(cls.user.username)
 
-        cls.service = GroupBeneficiaryService(cls.user)
+        group_beneficiary_service = GroupBeneficiaryService(cls.user)
 
         cls.group_beneficiary1_uuid = add_group_to_benefit_plan(
-            cls.service,
+            group_beneficiary_service,
             cls.group1,
             cls.benefit_plan,
             {'status': 'ACTIVE'}
         )
         cls.group_beneficiary1 = GroupBeneficiary.objects.get(id=cls.group_beneficiary1_uuid)
-        cls.group_beneficiary1.project = cls.project
-        cls.group_beneficiary1.save(user=cls.user)
 
         cls.group_beneficiary2_uuid = add_group_to_benefit_plan(
-            cls.service,
+            group_beneficiary_service,
             cls.group2,
             cls.benefit_plan,
             {'status': 'ACTIVE'}
         )
         cls.group_beneficiary2 = GroupBeneficiary.objects.get(id=cls.group_beneficiary2_uuid)
-        cls.group_beneficiary2.project = cls.project
-        cls.group_beneficiary2.save(user=cls.user)
+
+        # Create enrollment records for group beneficiaries
+        cls.enrollment1 = GroupBeneficiaryProjectEnrollment(
+            group_beneficiary=cls.group_beneficiary1,
+            project=cls.project
+        )
+        cls.enrollment1.save(user=cls.user)
+        cls.enrollment2 = GroupBeneficiaryProjectEnrollment(
+            group_beneficiary=cls.group_beneficiary2,
+            project=cls.project
+        )
+        cls.enrollment2.save(user=cls.user)
+
+        cls.service = ProjectEnrollmentService(cls.user, ProjectEnrollmentService.GROUP)
 
     def test_create_group_time_entries(self):
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': [
                 {
-                    'group_beneficiary_id': self.group_beneficiary1.id,
+                    'enrollment_id': self.enrollment1.id,
                     'day_number': 1,
                     'percent_complete': 60,
                 },
                 {
-                    'group_beneficiary_id': self.group_beneficiary2.id,
+                    'enrollment_id': self.enrollment2.id,
                     'day_number': 1,
                     'percent_complete': 80,
                 },
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
-
-        self.assertTrue(result['success'])
-        self.assertEqual(result['data']['created'], 2)
-        self.assertEqual(result['data']['updated'], 0)
+        self.service.bulk_update_time_entries(obj_data)
 
         entries = GroupBeneficiaryProjectTimeEntry.objects.filter(
-            group_beneficiary_id__in=[self.group_beneficiary1.id, self.group_beneficiary2.id],
+            enrollment_id__in=[self.enrollment1.id, self.enrollment2.id],
             is_deleted=False
         )
         self.assertEqual(entries.count(), 2)
 
     def test_update_group_time_entries(self):
         entry1 = GroupBeneficiaryProjectTimeEntry(
-            group_beneficiary_id=self.group_beneficiary1.id,
+            enrollment_id=self.enrollment1.id,
             day_number=2,
             percent_complete=20,
         )
@@ -275,22 +321,17 @@ class GroupBeneficiaryTimeEntryServiceTest(TestCase):
         self.assertIsNone(original_date_valid_to)
 
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': [
                 {
                     'id': entry1.id,
-                    'group_beneficiary_id': self.group_beneficiary1.id,
+                    'enrollment_id': self.enrollment1.id,
                     'day_number': 2,
                     'percent_complete': 85,
                 },
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
-
-        self.assertTrue(result['success'])
-        self.assertEqual(result['data']['created'], 0)
-        self.assertEqual(result['data']['updated'], 1)
+        self.service.bulk_update_time_entries(obj_data)
 
         entry1.refresh_from_db()
         self.assertEqual(entry1.percent_complete, 85)
@@ -308,36 +349,34 @@ class GroupBeneficiaryTimeEntryServiceTest(TestCase):
         latest_history = history.first()
         self.assertEqual(latest_history.percent_complete, 85)
 
-    def test_invalid_group_beneficiary_id(self):
+    def test_invalid_enrollment_id(self):
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': [
                 {
-                    'group_beneficiary_id': uuid.uuid4(),
+                    'enrollment_id': uuid.uuid4(),
                     'day_number': 1,
                     'percent_complete': 50,
                 }
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
+        with self.assertRaises(ValueError) as context:
+            self.service.bulk_update_time_entries(obj_data)
 
-        self.assertFalse(result['success'])
-        self.assertIn('Invalid group beneficiary IDs', result['detail'])
+        self.assertIn('Invalid enrollment IDs', str(context.exception))
 
     def test_day_number_validation(self):
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': [
                 {
-                    'group_beneficiary_id': self.group_beneficiary1.id,
+                    'enrollment_id': self.enrollment1.id,
                     'day_number': 0,
                     'percent_complete': 50,
                 }
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
+        with self.assertRaises(ValidationError) as context:
+            self.service.bulk_update_time_entries(obj_data)
 
-        self.assertFalse(result['success'])
-        self.assertIn('Day number must be between 1 and 15.', result['detail'])
+        self.assertIn('Day number must be between 1 and 15.', str(context.exception))

@@ -14,7 +14,11 @@ from social_protection.tests.test_helpers import (
     create_project,
 )
 from social_protection.services import GroupBeneficiaryService
-from social_protection.models import GroupBeneficiaryProjectTimeEntry, GroupBeneficiary
+from social_protection.models import (
+    GroupBeneficiaryProjectTimeEntry,
+    GroupBeneficiary,
+    GroupBeneficiaryProjectEnrollment,
+)
 from social_protection.apps import SocialProtectionConfig
 from core.models import Role, RoleRight, UserRole
 from location.test_helpers import create_test_village
@@ -431,11 +435,14 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             self.user.username,
         )
 
+        gb_1child = self.group_1child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        gb_2child = self.group_2child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+
         query_str = f'''
             mutation {{
               enrollGroupProject(
                 input: {{
-                  ids: ["{self.group_1child.id}", "{self.group_2child.id}"]
+                  ids: ["{gb_1child.id}", "{gb_2child.id}"]
                   projectId: "{str(project.id)}"
                 }}
               ) {{
@@ -616,17 +623,21 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         )
 
         # Enroll group_2child into exclusive project
-        self.group_2child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=exclusive_project)
+        gb_2child = self.group_2child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        enrollment_2child = GroupBeneficiaryProjectEnrollment(group_beneficiary=gb_2child, project=exclusive_project)
+        enrollment_2child.save(user=self.user)
 
         # Enroll group_1child into multi-enrollment project
-        self.group_1child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=multi_project)
+        gb_1child = self.group_1child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        enrollment_1child = GroupBeneficiaryProjectEnrollment(group_beneficiary=gb_1child, project=multi_project)
+        enrollment_1child.save(user=self.user)
 
         # Query using multi-enrollment project: should exclude group_2child, include group_1child and group_0child
         query_str = f"""
             query {{
               groupBeneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{multi_project.id}",
+                eligibleForProject: "{multi_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -655,7 +666,7 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             query {{
               groupBeneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{exclusive_project.id}",
+                eligibleForProject: "{exclusive_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -686,29 +697,31 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             self.user.username,
             allows_multiple_enrollments=True,
         )
-        # Assign the ACTIVE group beneficiary to this project
-        self.group_0child.groupbeneficiary_set.filter(
+        # Enroll the ACTIVE group beneficiary in this project
+        group_beneficiary = self.group_0child.groupbeneficiary_set.filter(
             benefit_plan=self.benefit_plan
-        ).update(project=project)
-
-        group_beneficiary = project.group_beneficiaries.first()
+        ).first()
+        enrollment = GroupBeneficiaryProjectEnrollment(
+            group_beneficiary=group_beneficiary, project=project
+        )
+        enrollment.save(user=self.user)
 
         # Create time entries
         GroupBeneficiaryProjectTimeEntry(
-            group_beneficiary=group_beneficiary, day_number=1, percent_complete=30
+            enrollment=enrollment, day_number=1, percent_complete=30
         ).save(username=self.user.username)
         GroupBeneficiaryProjectTimeEntry(
-            group_beneficiary=group_beneficiary, day_number=2, percent_complete=60
+            enrollment=enrollment, day_number=2, percent_complete=60
         ).save(username=self.user.username)
         GroupBeneficiaryProjectTimeEntry(
-            group_beneficiary=group_beneficiary, day_number=3, percent_complete=90
+            enrollment=enrollment, day_number=3, percent_complete=90
         ).save(username=self.user.username)
 
-        # Query with nested projectTimeEntries
+        # Query with nested projectEnrollments and timeEntries
         query_str = f"""
         query {{
           groupBeneficiary(
-            project_Id: "{project.uuid}",
+            enrolledInProject: "{project.id}",
             isDeleted: false,
             first: 10
           ) {{
@@ -718,14 +731,16 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 group {{
                   code
                 }}
-                project {{
-                  id
-                  name
-                }}
-                projectTimeEntries {{
-                  id
-                  dayNumber
-                  percentComplete
+                projectEnrollments {{
+                  project {{
+                    id
+                    name
+                  }}
+                  timeEntries {{
+                    id
+                    dayNumber
+                    percentComplete
+                  }}
                 }}
               }}
             }}
@@ -745,12 +760,12 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertEqual(beneficiary_data['totalCount'], 1)
         node = beneficiary_data['edges'][0]['node']
 
-        # Verify group + project
+        # Verify group + project through enrollment
         self.assertEqual(node['group']['code'], self.group_0child.code)
-        self.assertEqual(node['project']['name'], project.name)
+        self.assertEqual(node['projectEnrollments'][0]['project']['name'], project.name)
 
-        # Verify projectTimeEntries
-        time_entries = node['projectTimeEntries']
+        # Verify time entries
+        time_entries = node['projectEnrollments'][0]['timeEntries']
         self.assertEqual(len(time_entries), 3)
 
         # Check order and values
@@ -810,10 +825,13 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         data = json.loads(response.content)['data']['enrollGroupProject']
         self.assert_mutation_success(data['internalId'], self.enroll_user_token)
 
-        # Verify that expected project group beneficiary is persisted in the db
-        group_beneficiary.refresh_from_db()
-        self.assertIsNotNone(group_beneficiary.project)
-        self.assertEqual(group_beneficiary.project.id, project.id)
+        # Verify that expected project enrollment is persisted in the db
+        enrollment = GroupBeneficiaryProjectEnrollment.objects.filter(
+            group_beneficiary=group_beneficiary,
+            project=project,
+            is_deleted=False
+        ).first()
+        self.assertIsNotNone(enrollment)
 
     def test_bulk_update_group_beneficiary_time_entries(self):
         project = create_project(
@@ -827,16 +845,18 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             group=self.group_0child,
             benefit_plan=self.benefit_plan
         ).first()
-        group_beneficiary.project = project
-        group_beneficiary.save(user=self.user)
+        enrollment = GroupBeneficiaryProjectEnrollment(
+            group_beneficiary=group_beneficiary,
+            project=project
+        )
+        enrollment.save(user=self.user)
 
         query_str = f'''
             mutation {{
               bulkUpdateGroupBeneficiaryTimeEntries(
                 input: {{
-                  projectId: "{str(project.id)}"
                   timeEntries: [{{
-                    groupBeneficiaryId: "{str(group_beneficiary.id)}"
+                    enrollmentId: "{str(enrollment.id)}"
                     dayNumber: 1
                     percentComplete: 50
                   }}]
@@ -874,7 +894,7 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
 
         # Verify that expected time entry is persisted in the db
         time_entry = GroupBeneficiaryProjectTimeEntry.objects.filter(
-            group_beneficiary=group_beneficiary,
+            enrollment=enrollment,
             day_number=1
         ).first()
         self.assertIsNotNone(time_entry)

@@ -25,6 +25,8 @@ from social_protection.models import (
     Project,
     BeneficiaryProjectTimeEntry,
     GroupBeneficiaryProjectTimeEntry,
+    BeneficiaryProjectEnrollment,
+    GroupBeneficiaryProjectEnrollment,
 )
 
 from social_protection.utils import load_dataframe, fetch_summary_of_valid_items, fetch_summary_of_broken_items
@@ -124,21 +126,6 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
     def delete(self, obj_data):
         return super().delete(obj_data)
 
-    @register_service_signal('beneficiary_service.enroll_project')
-    def enroll_project(self, obj_data):
-        project_id = obj_data['project_id']
-        enroll_ids = obj_data.get('ids', [])
-        unenroll_ids = Beneficiary.objects.filter(project_id=project_id)\
-            .exclude(id__in=enroll_ids).values_list('id', flat=True)
-        with transaction.atomic():
-            try:
-                for id in unenroll_ids:
-                    super().update({'id': id, 'project_id': None})
-                for id in enroll_ids:
-                    super().update({'id': id, 'project_id': project_id})
-            except Exception as exc:
-                return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
-
     def _business_data_serializer(self, data):
         def serialize(key, value):
             if key == 'id':
@@ -156,69 +143,6 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
 
         serialized_data = crud_business_data_builder(data, serialize)
         return serialized_data
-
-    @register_service_signal('beneficiary_service.bulk_update_time_entries')
-    def bulk_update_time_entries(self, obj_data):
-        try:
-            project_id = obj_data.get('project_id')
-            time_entries_data = obj_data.get('time_entries', [])
-
-            if not time_entries_data:
-                return {
-                    'success': True,
-                    'message': _('No time entries to update'),
-                    'data': {'created': 0, 'updated': 0}
-                }
-
-            project = Project.objects.filter(id=project_id).first()
-            if not project:
-                raise ValueError(_('Project not found'))
-
-            beneficiary_ids = {e['beneficiary_id'] for e in time_entries_data}
-            valid_beneficiaries = set(
-                Beneficiary.objects.filter(
-                    id__in=beneficiary_ids,
-                    project_id=project_id,
-                    is_deleted=False
-                ).values_list('id', flat=True)
-            )
-
-            if invalid_ids := beneficiary_ids - valid_beneficiaries:
-                raise ValueError(_('Invalid beneficiary IDs or not in project: %(ids)s') % {'ids': invalid_ids})
-
-            for entry in time_entries_data:
-                day = entry['day_number']
-                if not 1 <= day <= project.working_days:
-                    raise ValidationError(
-                        _('Day number must be between 1 and %(working_days)s.') % {'working_days': project.working_days}
-                    )
-
-                percent = entry['percent_complete']
-                if not 0 <= percent <= 100:
-                    raise ValidationError(
-                        _('Percent complete must be between 0 and 100.')
-                    )
-
-            result = BeneficiaryProjectTimeEntry.bulk_save(
-                data_list=time_entries_data,
-                user=self.user
-            )
-
-            return {
-                'success': True,
-                'message': _('Created %(created)s, updated %(updated)s time entries') % {
-                    'created': result['created'],
-                    'updated': result['updated']
-                },
-                'data': result
-            }
-
-        except Exception as exc:
-            return output_exception(
-                model_name='BeneficiaryProjectTimeEntry',
-                method='bulk_update_time_entries',
-                exception=exc
-            )
 
 
 class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
@@ -265,83 +189,127 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
     def delete(self, obj_data):
         return super().delete(obj_data)
 
-    @register_service_signal('group_beneficiary_service.enroll_project')
+
+class ProjectEnrollmentService:
+    INDIVIDUAL = 'INDIVIDUAL'
+    GROUP = 'GROUP'
+
+    CONFIGS = {
+        INDIVIDUAL: {
+            'enrollment_model': BeneficiaryProjectEnrollment,
+            'time_entry_model': BeneficiaryProjectTimeEntry,
+            'fk_field': 'beneficiary_id',
+            'error_label': 'Beneficiaries',
+        },
+        GROUP: {
+            'enrollment_model': GroupBeneficiaryProjectEnrollment,
+            'time_entry_model': GroupBeneficiaryProjectTimeEntry,
+            'fk_field': 'group_beneficiary_id',
+            'error_label': 'Group beneficiaries',
+        },
+    }
+
+    def __init__(self, user, enrollment_type):
+        self.user = user
+        self.enrollment_type = enrollment_type
+        self.config = self.CONFIGS[enrollment_type]
+
+    @register_service_signal('project_enrollment_service.enroll_project')
     def enroll_project(self, obj_data):
         project_id = obj_data['project_id']
-        enroll_ids = obj_data.get('ids', [])
-        unenroll_ids = GroupBeneficiary.objects.filter(project_id=project_id)\
-            .exclude(id__in=enroll_ids).values_list('id', flat=True)
-        with transaction.atomic():
-            try:
-                for id in unenroll_ids:
-                    super().update({'id': id, 'project_id': None})
-                for id in enroll_ids:
-                    super().update({'id': id, 'project_id': project_id})
-            except Exception as exc:
-                return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+        beneficiary_ids = {uuid.UUID(str(bid)) for bid in obj_data.get('ids', [])}
 
-    @register_service_signal('group_beneficiary_service.bulk_update_time_entries')
-    def bulk_update_time_entries(self, obj_data):
-        try:
-            project_id = obj_data.get('project_id')
-            time_entries_data = obj_data.get('time_entries', [])
+        project = Project.objects.get(id=project_id)
+        enrollment_model = self.config['enrollment_model']
+        fk_field = self.config['fk_field']
 
-            if not time_entries_data:
-                return {
-                    'success': True,
-                    'message': _('No time entries to update'),
-                    'data': {'created': 0, 'updated': 0}
-                }
+        # including deleted
+        all_enrollments = {
+            getattr(e, fk_field): e
+            for e in enrollment_model.objects.filter(project_id=project_id)
+        }
 
-            project = Project.objects.filter(id=project_id).first()
-            if not project:
-                raise ValueError(_('Project not found'))
+        currently_enrolled = {
+            bid for bid, e in all_enrollments.items() if not e.is_deleted
+        }
 
-            group_beneficiary_ids = {e['group_beneficiary_id'] for e in time_entries_data}
-            valid_group_beneficiaries = set(
-                GroupBeneficiary.objects.filter(
-                    id__in=group_beneficiary_ids,
-                    project_id=project_id,
+        to_enroll = beneficiary_ids - currently_enrolled
+        to_unenroll = currently_enrolled - beneficiary_ids
+
+        if not project.allows_multiple_enrollments and to_enroll:
+            already_enrolled_elsewhere = set(
+                enrollment_model.objects.filter(
+                    **{f'{fk_field}__in': to_enroll},
                     is_deleted=False
-                ).values_list('id', flat=True)
+                ).exclude(project_id=project_id).values_list(fk_field, flat=True)
             )
+            if already_enrolled_elsewhere:
+                raise ValueError(
+                    _("%(label)s %(ids)s are already enrolled in another project. "
+                      "This project does not allow multiple enrollments.") % {
+                        'label': self.config['error_label'],
+                        'ids': already_enrolled_elsewhere
+                    }
+                )
 
-            if invalid_ids := group_beneficiary_ids - valid_group_beneficiaries:
-                raise ValueError(_('Invalid group beneficiary IDs or not in project: %(ids)s') % {'ids': invalid_ids})
+        data_list = []
 
-            for entry in time_entries_data:
-                day = entry['day_number']
-                if not 1 <= day <= project.working_days:
-                    raise ValidationError(
-                        _('Day number must be between 1 and %(working_days)s.') % {'working_days': project.working_days}
-                    )
+        for beneficiary_id in to_unenroll:
+            enrollment = all_enrollments[beneficiary_id]
+            data_list.append({'id': enrollment.id, 'is_deleted': True})
 
-                percent = entry['percent_complete']
-                if not 0 <= percent <= 100:
-                    raise ValidationError(
-                        _('Percent complete must be between 0 and 100.')
-                    )
+        for beneficiary_id in to_enroll:
+            if beneficiary_id in all_enrollments:
+                enrollment = all_enrollments[beneficiary_id]
+                data_list.append({'id': enrollment.id, 'is_deleted': False})
+            else:
+                data_list.append({fk_field: beneficiary_id, 'project_id': project_id})
 
-            result = GroupBeneficiaryProjectTimeEntry.bulk_save(
-                data_list=time_entries_data,
-                user=self.user
-            )
+        enrollment_model.bulk_save(data_list, self.user, include_deleted=True)
 
-            return {
-                'success': True,
-                'message': _('Created %(created)s, updated %(updated)s time entries') % {
-                    'created': result['created'],
-                    'updated': result['updated']
-                },
-                'data': result
-            }
 
-        except Exception as exc:
-            return output_exception(
-                model_name='GroupBeneficiaryProjectTimeEntry',
-                method='bulk_update_time_entries',
-                exception=exc
-            )
+    @register_service_signal('project_enrollment_service.bulk_update_time_entries')
+    def bulk_update_time_entries(self, obj_data):
+        time_entries_data = obj_data.get('time_entries', [])
+
+        if not time_entries_data:
+            return
+
+        enrollment_model = self.config['enrollment_model']
+        time_entry_model = self.config['time_entry_model']
+
+        enrollment_ids = {str(e['enrollment_id']) for e in time_entries_data}
+        enrollments = enrollment_model.objects.filter(
+            id__in=enrollment_ids,
+            is_deleted=False
+        ).select_related('project')
+
+        enrollment_map = {str(e.id): e for e in enrollments}
+        valid_enrollment_ids = set(enrollment_map.keys())
+
+        if invalid_ids := enrollment_ids - valid_enrollment_ids:
+            raise ValueError(_('Invalid enrollment IDs: %(ids)s') % {'ids': invalid_ids})
+
+        for entry in time_entries_data:
+            enrollment = enrollment_map[str(entry['enrollment_id'])]
+            project = enrollment.project
+
+            day = entry['day_number']
+            if not 1 <= day <= project.working_days:
+                raise ValidationError(
+                    _('Day number must be between 1 and %(working_days)s.') % {'working_days': project.working_days}
+                )
+
+            percent = entry['percent_complete']
+            if not 0 <= percent <= 100:
+                raise ValidationError(
+                    _('Percent complete must be between 0 and 100.')
+                )
+
+        time_entry_model.bulk_save(
+            data_list=time_entries_data,
+            user=self.user
+        )
 
 
 class BeneficiaryImportService:
@@ -742,7 +710,7 @@ class ProjectService(BaseService):
                 self.validation_class.validate_undo_delete(obj_data)
                 obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data['id']).first()
                 obj_.is_deleted = False
-                obj_.save(user=self.user.user)
+                obj_.save(user=self.user)
                 return {
                     "success": True,
                     "message": "Ok",

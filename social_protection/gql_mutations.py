@@ -15,7 +15,8 @@ from social_protection.models import (
 )
 from social_protection.services import (
     BenefitPlanService, ProjectService,
-    BeneficiaryService, GroupBeneficiaryService
+    BeneficiaryService, GroupBeneficiaryService,
+    ProjectEnrollmentService
 )
 from location.models import Location
 
@@ -630,7 +631,7 @@ class ProjectEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        return BeneficiaryService(user).enroll_project(data)
+        return ProjectEnrollmentService(user, ProjectEnrollmentService.INDIVIDUAL).enroll_project(data)
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
@@ -656,7 +657,7 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        return GroupBeneficiaryService(user).enroll_project(data)
+        return ProjectEnrollmentService(user, ProjectEnrollmentService.GROUP).enroll_project(data)
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
@@ -665,14 +666,9 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
 
 class TimeEntryInputType(graphene.InputObjectType):
     id = graphene.UUID(required=False)
-    beneficiary_id = graphene.UUID(required=True)
+    enrollment_id = graphene.UUID(required=True)
     day_number = graphene.Int(required=True)
     percent_complete = graphene.Int(required=True)
-
-
-class BulkUpdateTimeEntriesInputType(OpenIMISMutation.Input):
-    project_id = graphene.UUID(required=True)
-    time_entries = graphene.List(TimeEntryInputType, required=True)
 
 
 class BulkUpdateBeneficiaryTimeEntriesMutation(BaseMutation):
@@ -694,25 +690,11 @@ class BulkUpdateBeneficiaryTimeEntriesMutation(BaseMutation):
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        service = BeneficiaryService(user)
-        res = service.bulk_update_time_entries(data)
+        service = ProjectEnrollmentService(user, ProjectEnrollmentService.INDIVIDUAL)
+        service.bulk_update_time_entries(data)
 
-        return res if not res['success'] else None
-
-    class Input(BulkUpdateTimeEntriesInputType):
-        pass
-
-
-class GroupTimeEntryInputType(graphene.InputObjectType):
-    id = graphene.UUID(required=False)
-    group_beneficiary_id = graphene.UUID(required=True)
-    day_number = graphene.Int(required=True)
-    percent_complete = graphene.Int(required=True)
-
-
-class BulkUpdateGroupTimeEntriesInputType(OpenIMISMutation.Input):
-    project_id = graphene.UUID(required=True)
-    time_entries = graphene.List(GroupTimeEntryInputType, required=True)
+    class Input(OpenIMISMutation.Input):
+        time_entries = graphene.List(TimeEntryInputType, required=True)
 
 
 class BulkUpdateGroupBeneficiaryTimeEntriesMutation(BaseMutation):
@@ -734,10 +716,8 @@ class BulkUpdateGroupBeneficiaryTimeEntriesMutation(BaseMutation):
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        service = GroupBeneficiaryService(user)
-        res = service.bulk_update_time_entries(data)
+        service = ProjectEnrollmentService(user, ProjectEnrollmentService.GROUP)
+        service.bulk_update_time_entries(data)
 
-        return res if not res['success'] else None
-
-    class Input(BulkUpdateGroupTimeEntriesInputType):
-        pass
+    class Input(OpenIMISMutation.Input):
+        time_entries = graphene.List(TimeEntryInputType, required=True)

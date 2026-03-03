@@ -1,12 +1,18 @@
 import copy
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from individual.models import Individual
 
-from social_protection.models import Beneficiary, BenefitPlan, BeneficiaryProjectTimeEntry
-from social_protection.services import BeneficiaryService
+from social_protection.models import (
+    Beneficiary,
+    BenefitPlan,
+    BeneficiaryProjectTimeEntry,
+    BeneficiaryProjectEnrollment
+)
+from social_protection.services import BeneficiaryService, ProjectEnrollmentService
 from social_protection.tests.data import (
     service_beneficiary_add_payload,
     service_beneficiary_update_status_active_payload
@@ -140,45 +146,81 @@ class BeneficiaryServiceTest(TestCase):
         self.assertEqual(query.count(), 0)
 
     def test_enroll_project(self):
-        uuid1 = self.add_beneficiary_return_uuid(self.individual, self.benefit_plan_no_max)
-        uuid2 = self.add_beneficiary_return_uuid(self.individual2, self.benefit_plan_no_max)
+        uuid1 = self.add_beneficiary_return_uuid(
+            self.individual, self.benefit_plan_no_max, status="ACTIVE"
+        )
+        uuid2 = self.add_beneficiary_return_uuid(
+            self.individual2, self.benefit_plan_no_max, status="ACTIVE"
+        )
 
         project = create_project(
             'test enrollment project',
-            self.benefit_plan,
+            self.benefit_plan_no_max,
             self.user.username,
         )
+
+        enrollment_service = ProjectEnrollmentService(self.user, ProjectEnrollmentService.INDIVIDUAL)
 
         payload = {
             'ids': [uuid1, uuid2],
             'project_id': str(project.id),
         }
 
-        self.service.enroll_project(payload)
+        enrollment_service.enroll_project(payload)
 
-        # Check that both beneficiaries are enrolled into the test project
-        beneficiaries = Beneficiary.objects.filter(id__in=[uuid1, uuid2])
-        self.assertEqual(beneficiaries.count(), 2)
-        for beneficiary in beneficiaries:
-            self.assertEqual(beneficiary.project_id, project.id)
-            self.assertEqual(beneficiary.benefit_plan_id, self.benefit_plan_no_max.id)
+        # Check that both beneficiaries are enrolled into the test project via enrollment records
+        enrollments = BeneficiaryProjectEnrollment.objects.filter(
+            project_id=project.id,
+            is_deleted=False
+        )
+        self.assertEqual(enrollments.count(), 2)
+        enrolled_beneficiary_ids = set(str(e.beneficiary_id) for e in enrollments)
+        self.assertEqual(enrolled_beneficiary_ids, {uuid1, uuid2})
 
         payload = {
             'ids': [uuid1],
             'project_id': str(project.id),
         }
 
-        self.service.enroll_project(payload)
+        enrollment_service.enroll_project(payload)
 
         # Check that only the first beneficiary is enrolled into the test project
-        beneficiaries = Beneficiary.objects.filter(project_id=project.id)
-        self.assertEqual(beneficiaries.count(), 1)
-        beneficiary = beneficiaries.first()
-        self.assertEqual(str(beneficiary.id), uuid1)
+        enrollments = BeneficiaryProjectEnrollment.objects.filter(
+            project_id=project.id,
+            is_deleted=False
+        )
+        self.assertEqual(enrollments.count(), 1)
+        enrollment = enrollments.first()
+        self.assertEqual(str(enrollment.beneficiary_id), uuid1)
+
+        # Verify enrolling in another non-exclusive project doesn't unenroll from the first
+        project2 = create_project(
+            'second non-exclusive project',
+            self.benefit_plan_no_max,
+            self.user.username,
+            allows_multiple_enrollments=True,
+        )
+        # Make the first project also non-exclusive
+        project.allows_multiple_enrollments = True
+        project.save(user=self.user)
+
+        enrollment_service.enroll_project({
+            'ids': [uuid1],
+            'project_id': str(project2.id),
+        })
+
+        # Verify beneficiary is enrolled in both projects
+        all_enrollments = BeneficiaryProjectEnrollment.objects.filter(
+            beneficiary_id=uuid1,
+            is_deleted=False
+        )
+        self.assertEqual(all_enrollments.count(), 2)
+        enrolled_project_ids = set(e.project_id for e in all_enrollments)
+        self.assertEqual(enrolled_project_ids, {project.id, project2.id})
 
 
 class BeneficiaryTimeEntryServiceTest(TestCase):
-    """Test BeneficiaryService.bulk_update_time_entries"""
+    """Test ProjectEnrollmentService.bulk_update_time_entries for INDIVIDUAL type"""
 
     @classmethod
     def setUpClass(cls):
@@ -199,62 +241,67 @@ class BeneficiaryTimeEntryServiceTest(TestCase):
         cls.individual1 = create_individual(cls.user.username, {'first_name': 'Alice'})
         cls.individual2 = create_individual(cls.user.username, {'first_name': 'Bob'})
 
-        cls.service = BeneficiaryService(cls.user)
+        beneficiary_service = BeneficiaryService(cls.user)
 
         cls.beneficiary1_uuid = add_individual_to_benefit_plan(
-            cls.service,
+            beneficiary_service,
             cls.individual1,
             cls.benefit_plan,
             {'status': 'ACTIVE'}
         )
         cls.beneficiary1 = Beneficiary.objects.get(id=cls.beneficiary1_uuid)
-        cls.beneficiary1.project = cls.project
-        cls.beneficiary1.save(user=cls.user)
 
         cls.beneficiary2_uuid = add_individual_to_benefit_plan(
-            cls.service,
+            beneficiary_service,
             cls.individual2,
             cls.benefit_plan,
             {'status': 'ACTIVE'}
         )
         cls.beneficiary2 = Beneficiary.objects.get(id=cls.beneficiary2_uuid)
-        cls.beneficiary2.project = cls.project
-        cls.beneficiary2.save(user=cls.user)
+
+        # Create enrollment records for beneficiaries
+        cls.enrollment1 = BeneficiaryProjectEnrollment(
+            beneficiary=cls.beneficiary1,
+            project=cls.project
+        )
+        cls.enrollment1.save(user=cls.user)
+        cls.enrollment2 = BeneficiaryProjectEnrollment(
+            beneficiary=cls.beneficiary2,
+            project=cls.project
+        )
+        cls.enrollment2.save(user=cls.user)
+
+        cls.service = ProjectEnrollmentService(cls.user, ProjectEnrollmentService.INDIVIDUAL)
 
 
 
     def test_create_time_entries(self):
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': [
                 {
-                    'beneficiary_id': self.beneficiary1.id,
+                    'enrollment_id': self.enrollment1.id,
                     'day_number': 1,
                     'percent_complete': 50,
                 },
                 {
-                    'beneficiary_id': self.beneficiary2.id,
+                    'enrollment_id': self.enrollment2.id,
                     'day_number': 1,
                     'percent_complete': 75,
                 },
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
-
-        self.assertTrue(result['success'])
-        self.assertEqual(result['data']['created'], 2)
-        self.assertEqual(result['data']['updated'], 0)
+        self.service.bulk_update_time_entries(obj_data)
 
         entries = BeneficiaryProjectTimeEntry.objects.filter(
-            beneficiary_id__in=[self.beneficiary1.id, self.beneficiary2.id],
+            enrollment_id__in=[self.enrollment1.id, self.enrollment2.id],
             is_deleted=False
         )
         self.assertEqual(entries.count(), 2)
 
     def test_update_time_entries(self):
         entry1 = BeneficiaryProjectTimeEntry(
-            beneficiary_id=self.beneficiary1.id,
+            enrollment_id=self.enrollment1.id,
             day_number=2,
             percent_complete=30,
         )
@@ -268,22 +315,17 @@ class BeneficiaryTimeEntryServiceTest(TestCase):
         self.assertIsNone(original_date_valid_to)
 
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': [
                 {
                     'id': entry1.id,
-                    'beneficiary_id': self.beneficiary1.id,
+                    'enrollment_id': self.enrollment1.id,
                     'day_number': 2,
                     'percent_complete': 90,
                 },
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
-
-        self.assertTrue(result['success'])
-        self.assertEqual(result['data']['created'], 0)
-        self.assertEqual(result['data']['updated'], 1)
+        self.service.bulk_update_time_entries(obj_data)
 
         entry1.refresh_from_db()
         self.assertEqual(entry1.percent_complete, 90)
@@ -301,65 +343,43 @@ class BeneficiaryTimeEntryServiceTest(TestCase):
         latest_history = history.first()
         self.assertEqual(latest_history.percent_complete, 90)
 
-    def test_invalid_project_id(self):
+    def test_invalid_enrollment_id(self):
         obj_data = {
-            'project_id': uuid.uuid4(),
             'time_entries': [
                 {
-                    'beneficiary_id': self.beneficiary1.id,
-                    'day_number': 5,
-                    'percent_complete': 50,
-                }
-            ]
-        }
-
-        result = self.service.bulk_update_time_entries(obj_data)
-
-        self.assertFalse(result['success'])
-        self.assertIn('Project not found', result['detail'])
-
-    def test_invalid_beneficiary_id(self):
-        obj_data = {
-            'project_id': self.project.id,
-            'time_entries': [
-                {
-                    'beneficiary_id': uuid.uuid4(),
+                    'enrollment_id': uuid.uuid4(),
                     'day_number': 1,
                     'percent_complete': 50,
                 }
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
+        with self.assertRaises(ValueError) as context:
+            self.service.bulk_update_time_entries(obj_data)
 
-        self.assertFalse(result['success'])
-        self.assertIn('Invalid beneficiary IDs', result['detail'])
+        self.assertIn('Invalid enrollment IDs', str(context.exception))
 
     def test_day_number_out_of_range(self):
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': [
                 {
-                    'beneficiary_id': self.beneficiary1.id,
+                    'enrollment_id': self.enrollment1.id,
                     'day_number': 999,
                     'percent_complete': 50,
                 }
             ]
         }
 
-        result = self.service.bulk_update_time_entries(obj_data)
+        with self.assertRaises(ValidationError) as context:
+            self.service.bulk_update_time_entries(obj_data)
 
-        self.assertFalse(result['success'])
-        self.assertIn('Day number must be between 1 and 10.', result['detail'])
+        self.assertIn('Day number must be between 1 and 10.', str(context.exception))
 
     def test_empty_time_entries(self):
         obj_data = {
-            'project_id': self.project.id,
             'time_entries': []
         }
 
         result = self.service.bulk_update_time_entries(obj_data)
 
-        self.assertTrue(result['success'])
-        self.assertEqual(result['data']['created'], 0)
-        self.assertEqual(result['data']['updated'], 0)
+        self.assertIsNone(result)
