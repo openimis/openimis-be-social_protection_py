@@ -1,7 +1,7 @@
 import json
 from core.models import User
 from core.models.openimis_graphql_test_case import BaseTestContext
-from core.test_helpers import create_test_interactive_user, create_enrolment_officer_role
+from core.test_helpers import create_test_interactive_user, create_test_role
 from social_protection.tests.test_helpers import (
     PatchedOpenIMISGraphQLTestCase,
     find_or_create_activity,
@@ -23,7 +23,7 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         username = cls.user.username
 
         cls.test_officer = create_test_interactive_user(
-            username="projectUserNoRight", roles=[create_enrolment_officer_role().id])  # 1 is a generic role with no project access
+            username="projectUserNoRight", roles=[create_test_role().id])  # with no project access
         cls.test_officer_token = BaseTestContext(user=cls.test_officer).get_jwt()
 
         # Required dependencies
