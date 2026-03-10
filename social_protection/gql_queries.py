@@ -14,9 +14,16 @@ from individual.gql_queries import IndividualGQLType, GroupGQLType, \
 from location.models import Location
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
-    Beneficiary, BenefitPlan, GroupBeneficiary, BenefitPlanDataUploadRecords,
-    Activity, Project, BeneficiaryProjectTimeEntry, GroupBeneficiaryProjectTimeEntry,
-    BeneficiaryProjectEnrollment, GroupBeneficiaryProjectEnrollment,
+    Beneficiary,
+    BenefitPlan,
+    GroupBeneficiary,
+    BenefitPlanDataUploadRecords,
+    Activity,
+    Project,
+    BeneficiaryProjectTimeEntry,
+    GroupBeneficiaryProjectTimeEntry,
+    BeneficiaryProjectEnrollment,
+    GroupBeneficiaryProjectEnrollment,
 )
 
 
@@ -30,7 +37,8 @@ def _have_permissions(user, permission):
 
 class JsonExtMixin:
     def resolve_json_ext(self, info):
-        if _have_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms):
+        perms = SocialProtectionConfig.gql_schema_search_perms
+        if _have_permissions(info.context.user, perms):
             return self.json_ext
         return None
 
@@ -44,24 +52,30 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
         interfaces = (graphene.relay.Node,)
         filter_fields = {
             "id": ["exact"],
-            "code": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
-            "name": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "code": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
+            "name": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
             "max_beneficiaries": ["exact", "lt", "lte", "gt", "gte"],
-            "institution": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
-            "type": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "institution": ["exact", "iexact", "startswith", "istartswith",
+                            "contains", "icontains"],
+            "type": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
 
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
             "is_deleted": ["exact"],
             "version": ["exact"],
-            "description": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "description": ["exact", "iexact", "startswith", "istartswith",
+                            "contains", "icontains"],
         }
         connection_class = ExtendedConnection
 
     def resolve_beneficiary_data_schema(self, info):
-        if _have_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms):
+        perms = SocialProtectionConfig.gql_schema_search_perms
+        if _have_permissions(info.context.user, perms):
             return self.beneficiary_data_schema
         return None
 
@@ -74,6 +88,7 @@ class BeneficiaryProjectTimeEntryGQLType(DjangoObjectType):
         model = BeneficiaryProjectTimeEntry
         fields = ("id", "day_number", "percent_complete")
         interfaces = (graphene.relay.Node,)
+
 
 class GroupBeneficiaryProjectTimeEntryGQLType(DjangoObjectType):
     class Meta:
@@ -114,10 +129,13 @@ class BeneficiarySharedFilterMixin:
             # For level 3 (Village), we look at group's location directly
             # For lower levels, we traverse up the parent chain
             parent_chain = '__'.join(['parent'] * (3 - level))
-            lookup = (
-                f"{self.location_prefix}location__{parent_chain}__name__icontains"
-                if parent_chain else f"{self.location_prefix}location__name__icontains"
-            )
+            if parent_chain:
+                lookup = (
+                    f"{self.location_prefix}location__"
+                    f"{parent_chain}__name__icontains"
+                )
+            else:
+                lookup = f"{self.location_prefix}location__name__icontains"
             location_q &= Q(**{lookup: search_term})
 
         return queryset.filter(location_q) if location_q else queryset
@@ -139,29 +157,23 @@ class BeneficiarySharedFilterMixin:
         enrollment_model = self._get_enrollment_model()
         beneficiary_field = self._get_beneficiary_field()
 
-        # Get IDs of beneficiaries already enrolled in this project
-        enrolled_in_this_project = set(
-            enrollment_model.objects.filter(
-                project_id=project.id,
-                is_deleted=False
-            ).values_list(f'{beneficiary_field}_id', flat=True)
-        )
-
         if project.allows_multiple_enrollments:
-            # Exclude beneficiaries enrolled in exclusive projects (other than this one)
             enrolled_in_exclusive = set(
                 enrollment_model.objects.filter(
                     project__allows_multiple_enrollments=False,
                     is_deleted=False
-                ).exclude(project_id=project.id).values_list(f'{beneficiary_field}_id', flat=True)
+                ).exclude(
+                    project_id=project.id
+                ).values_list(f'{beneficiary_field}_id', flat=True)
             )
             return queryset.exclude(id__in=enrolled_in_exclusive)
         else:
-            # Include only beneficiaries not enrolled elsewhere or already in this project
             enrolled_elsewhere = set(
                 enrollment_model.objects.filter(
                     is_deleted=False
-                ).exclude(project_id=project.id).values_list(f'{beneficiary_field}_id', flat=True)
+                ).exclude(
+                    project_id=project.id
+                ).values_list(f'{beneficiary_field}_id', flat=True)
             )
             return queryset.exclude(id__in=enrolled_elsewhere)
 
@@ -177,29 +189,38 @@ class BeneficiarySharedFilterMixin:
         return queryset.filter(id__in=enrolled_ids)
 
     def _get_enrollment_model(self):
-        raise NotImplementedError("Subclass must implement _get_enrollment_model")
+        raise NotImplementedError(
+            "Subclass must implement _get_enrollment_model")
 
     def _get_beneficiary_field(self):
-        raise NotImplementedError("Subclass must implement _get_beneficiary_field")
+        raise NotImplementedError(
+            "Subclass must implement _get_beneficiary_field")
 
 
-class BeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMixin):
+class BeneficiaryFilter(
+    django_filters.FilterSet, BeneficiarySharedFilterMixin
+):
     location_prefix = "individual__"
     is_eligible = django_filters.BooleanFilter(method='filter_is_eligible')
     search = django_filters.CharFilter(method='filter_search')
     location = django_filters.CharFilter(method='filter_location')
-    eligible_for_project = django_filters.CharFilter(method='filter_eligible_for_project')
-    enrolled_in_project = django_filters.CharFilter(method='filter_enrolled_in_project')
+    eligible_for_project = django_filters.CharFilter(
+        method='filter_eligible_for_project')
+    enrolled_in_project = django_filters.CharFilter(
+        method='filter_enrolled_in_project')
 
     class Meta:
         model = Beneficiary
         fields = {
             "id": ["exact"],
-            "status": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "status": ["exact", "iexact", "startswith", "istartswith",
+                       "contains", "icontains"],
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
-            **prefix_filterset("individual__", IndividualGQLType._meta.filter_fields),
-            **prefix_filterset("benefit_plan__", BenefitPlanGQLType._meta.filter_fields),
+            **prefix_filterset("individual__",
+                               IndividualGQLType._meta.filter_fields),
+            **prefix_filterset("benefit_plan__",
+                               BenefitPlanGQLType._meta.filter_fields),
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
             "is_deleted": ["exact"],
@@ -220,17 +241,17 @@ class BeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMixin):
             type='V',
             validity_to__isnull=True,
         ).filter(
-            Q(name__icontains=value) |
-            Q(parent__name__icontains=value) |
-            Q(parent__parent__name__icontains=value) |
-            Q(parent__parent__parent__name__icontains=value)
+            Q(name__icontains=value)
+            | Q(parent__name__icontains=value)
+            | Q(parent__parent__name__icontains=value)
+            | Q(parent__parent__parent__name__icontains=value)
         ).values_list('id', flat=True)
 
         return queryset.filter(
-            Q(individual__first_name__icontains=value) |
-            Q(individual__last_name__icontains=value) |
-            Q(json_ext__icontains=value) |
-            Q(individual__location__id__in=village_matches)
+            Q(individual__first_name__icontains=value)
+            | Q(individual__last_name__icontains=value)
+            | Q(json_ext__icontains=value)
+            | Q(individual__location__id__in=village_matches)
         )
 
 
@@ -249,7 +270,8 @@ class BeneficiaryProjectEnrollmentGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_time_entries(self, info, **kwargs):
-        qs = BeneficiaryProjectTimeEntry.objects.filter(enrollment=self, is_deleted=False)
+        qs = BeneficiaryProjectTimeEntry.objects.filter(
+            enrollment=self, is_deleted=False)
         return gql_optimizer.query(qs, info)
 
 
@@ -268,27 +290,35 @@ class BeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
         return self.is_eligible
 
     def resolve_project_enrollments(self, info, **kwargs):
-        qs = BeneficiaryProjectEnrollment.objects.filter(beneficiary=self, is_deleted=False)
+        qs = BeneficiaryProjectEnrollment.objects.filter(
+            beneficiary=self, is_deleted=False)
         return gql_optimizer.query(qs, info)
 
 
-class GroupBeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMixin):
+class GroupBeneficiaryFilter(
+    django_filters.FilterSet, BeneficiarySharedFilterMixin
+):
     location_prefix = "group__"
     is_eligible = django_filters.BooleanFilter(method='filter_is_eligible')
     search = django_filters.CharFilter(method='filter_search')
     location = django_filters.CharFilter(method='filter_location')
-    eligible_for_project = django_filters.CharFilter(method='filter_eligible_for_project')
-    enrolled_in_project = django_filters.CharFilter(method='filter_enrolled_in_project')
+    eligible_for_project = django_filters.CharFilter(
+        method='filter_eligible_for_project')
+    enrolled_in_project = django_filters.CharFilter(
+        method='filter_enrolled_in_project')
 
     class Meta:
         model = GroupBeneficiary
         fields = {
             "id": ["exact"],
-            "status": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "status": ["exact", "iexact", "startswith", "istartswith",
+                       "contains", "icontains"],
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
-            **prefix_filterset("group__", GroupGQLType._meta.filter_fields),
-            **prefix_filterset("benefit_plan__", BenefitPlanGQLType._meta.filter_fields),
+            **prefix_filterset("group__",
+                               GroupGQLType._meta.filter_fields),
+            **prefix_filterset("benefit_plan__",
+                               BenefitPlanGQLType._meta.filter_fields),
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
             "is_deleted": ["exact"],
@@ -306,8 +336,8 @@ class GroupBeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMi
             return queryset
 
         head_matches = GroupIndividual.objects.filter(
-            Q(individual__first_name__icontains=value) |
-            Q(individual__last_name__icontains=value),
+            Q(individual__first_name__icontains=value)
+            | Q(individual__last_name__icontains=value),
             role=GroupIndividual.Role.HEAD,
             is_deleted=False
         ).values_list('group_id', flat=True)
@@ -316,17 +346,17 @@ class GroupBeneficiaryFilter(django_filters.FilterSet, BeneficiarySharedFilterMi
             type='V',
             validity_to__isnull=True,
         ).filter(
-            Q(name__icontains=value) |
-            Q(parent__name__icontains=value) |
-            Q(parent__parent__name__icontains=value) |
-            Q(parent__parent__parent__name__icontains=value)
+            Q(name__icontains=value)
+            | Q(parent__name__icontains=value)
+            | Q(parent__parent__name__icontains=value)
+            | Q(parent__parent__parent__name__icontains=value)
         ).values_list('id', flat=True)
 
         return queryset.filter(
-            Q(group__code__icontains=value) |
-            Q(json_ext__icontains=value) |
-            Q(group__id__in=head_matches) |
-            Q(group__location__id__in=village_matches)
+            Q(group__code__icontains=value)
+            | Q(json_ext__icontains=value)
+            | Q(group__id__in=head_matches)
+            | Q(group__location__id__in=village_matches)
         )
 
 
@@ -345,14 +375,16 @@ class GroupBeneficiaryProjectEnrollmentGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_time_entries(self, info, **kwargs):
-        qs = GroupBeneficiaryProjectTimeEntry.objects.filter(enrollment=self, is_deleted=False)
+        qs = GroupBeneficiaryProjectTimeEntry.objects.filter(
+            enrollment=self, is_deleted=False)
         return gql_optimizer.query(qs, info)
 
 
 class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
     is_eligible = graphene.Boolean()
-    project_enrollments = graphene.List(GroupBeneficiaryProjectEnrollmentGQLType)
+    project_enrollments = graphene.List(
+        GroupBeneficiaryProjectEnrollmentGQLType)
 
     class Meta:
         model = GroupBeneficiary
@@ -364,7 +396,8 @@ class GroupBeneficiaryGQLType(DjangoObjectType, JsonExtMixin):
         return self.is_eligible
 
     def resolve_project_enrollments(self, info, **kwargs):
-        qs = GroupBeneficiaryProjectEnrollment.objects.filter(group_beneficiary=self, is_deleted=False)
+        qs = GroupBeneficiaryProjectEnrollment.objects.filter(
+            group_beneficiary=self, is_deleted=False)
         return gql_optimizer.query(qs, info)
 
 
@@ -380,9 +413,13 @@ class BenefitPlanDataUploadQGLType(DjangoObjectType, JsonExtMixin):
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
             "is_deleted": ["exact"],
             "version": ["exact"],
-            "workflow": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
-            **prefix_filterset("data_upload__", IndividualDataSourceUploadGQLType._meta.filter_fields),
-            **prefix_filterset("benefit_plan__", BenefitPlanGQLType._meta.filter_fields),
+            "workflow": ["exact", "iexact", "startswith", "istartswith",
+                         "contains", "icontains"],
+            **prefix_filterset(
+                "data_upload__",
+                IndividualDataSourceUploadGQLType._meta.filter_fields),
+            **prefix_filterset("benefit_plan__",
+                               BenefitPlanGQLType._meta.filter_fields),
         }
         connection_class = ExtendedConnection
 
@@ -391,7 +428,8 @@ class BenefitPlanSchemaFieldsGQLType(ObjectType):
     schema_fields = graphene.List(graphene.String)
 
     def resolve_schema_fields(self, info, **kwargs):
-        schemas = self.values_list("beneficiary_data_schema__properties", flat=True)
+        schemas = self.values_list(
+            "beneficiary_data_schema__properties", flat=True)
         field_list = set(
             f'json_ext__{field}'
             for schema in schemas  # Iterate over each schema
@@ -413,23 +451,28 @@ class BenefitPlanHistoryGQLType(DjangoObjectType, JsonExtMixin):
         interfaces = (graphene.relay.Node,)
         filter_fields = {
             "id": ["exact"],
-            "code": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
-            "name": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "code": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
+            "name": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
             "date_valid_from": ["exact", "lt", "lte", "gt", "gte"],
             "date_valid_to": ["exact", "lt", "lte", "gt", "gte"],
             "max_beneficiaries": ["exact", "lt", "lte", "gt", "gte"],
-            "institution": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "institution": ["exact", "iexact", "startswith", "istartswith",
+                            "contains", "icontains"],
 
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
             "is_deleted": ["exact"],
             "version": ["exact"],
-            "description": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "description": ["exact", "iexact", "startswith", "istartswith",
+                            "contains", "icontains"],
         }
         connection_class = ExtendedConnection
 
     def resolve_beneficiary_data_schema(self, info):
-        if _have_permissions(info.context.user, SocialProtectionConfig.gql_schema_search_perms):
+        perms = SocialProtectionConfig.gql_schema_search_perms
+        if _have_permissions(info.context.user, perms):
             return self.beneficiary_data_schema
         return None
 
@@ -442,7 +485,8 @@ class ActivityFilter(django_filters.FilterSet):
         model = Activity
         fields = {
             "id": ["exact"],
-            "name": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "name": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
             "date_updated": ["exact", "lt", "lte", "gt", "gte"],
             "is_deleted": ["exact"],
@@ -465,7 +509,8 @@ class ProjectFilter(django_filters.FilterSet):
         model = Project
         fields = {
             "id": ["exact"],
-            "name": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "name": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
             'status': ['exact', 'icontains'],
             'benefit_plan__id': ['exact'],
             'activity__id': ['exact'],
@@ -500,7 +545,8 @@ class ProjectHistoryGQLType(DjangoObjectType):
         interfaces = (graphene.relay.Node,)
         filter_fields = {
             "id": ["exact"],
-            "name": ["exact", "iexact", "startswith", "istartswith", "contains", "icontains"],
+            "name": ["exact", "iexact", "startswith", "istartswith",
+                     "contains", "icontains"],
             'status': ['exact', 'icontains'],
             'benefit_plan__id': ['exact'],
             'activity__id': ['exact'],
