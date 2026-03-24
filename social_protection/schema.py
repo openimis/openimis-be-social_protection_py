@@ -2,8 +2,11 @@ import graphene
 import pandas as pd
 
 from django.contrib.auth.models import AnonymousUser
-from django.db.models import Q, Case, When, BooleanField, Value
+from django.db.models import (
+    Q, Case, When, BooleanField, Value, OuterRef, Subquery
+)
 from django.core.exceptions import PermissionDenied
+from individual.models import GroupIndividual
 
 from django.utils.translation import gettext as _
 from core.custom_filters import CustomFilterWizardStorage
@@ -19,7 +22,9 @@ from social_protection.gql_mutations import (
     CloseBenefitPlanMutation,
     CreateBeneficiaryMutation,
     UpdateBeneficiaryMutation,
-    DeleteBeneficiaryMutation, CreateGroupBeneficiaryMutation, UpdateGroupBeneficiaryMutation,
+    DeleteBeneficiaryMutation,
+    CreateGroupBeneficiaryMutation,
+    UpdateGroupBeneficiaryMutation,
     DeleteGroupBeneficiaryMutation,
     CreateProjectMutation,
     UpdateProjectMutation,
@@ -27,6 +32,8 @@ from social_protection.gql_mutations import (
     UndoDeleteProjectMutation,
     ProjectEnrollmentMutation,
     ProjectGroupEnrollmentMutation,
+    BulkUpdateBeneficiaryTimeEntriesMutation,
+    BulkUpdateGroupBeneficiaryTimeEntriesMutation,
 )
 from social_protection.gql_queries import (
     BenefitPlanGQLType,
@@ -102,7 +109,8 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         dateValidTo__Lte=graphene.DateTime(),
         parent_location=graphene.String(),
         parent_location_level=graphene.Int(),
-        village_or_child_of=graphene.Int(),  # improved version of parent_location + parent_location_level query
+        # improved version of parent_location + parent_location_level query
+        village_or_child_of=graphene.Int(),
         applyDefaultValidityFilter=graphene.Boolean(),
         client_mutation_id=graphene.String(),
         customFilters=graphene.List(of_type=graphene.String),
@@ -114,7 +122,8 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         dateValidTo__Lte=graphene.DateTime(),
         parent_location=graphene.String(),
         parent_location_level=graphene.Int(),
-        village_or_child_of=graphene.Int(),  # improved version of parent_location + parent_location_level query
+        # improved version of parent_location + parent_location_level query
+        village_or_child_of=graphene.Int(),
         applyDefaultValidityFilter=graphene.Boolean(),
         client_mutation_id=graphene.String(),
         customFilters=graphene.List(of_type=graphene.String),
@@ -147,7 +156,7 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
     benefit_plan_schema_field = graphene.Field(
         BenefitPlanSchemaFieldsGQLType,
         bf_type=graphene.Argument(BfTypeEnum),
-        description="Endpoint responsible for getting all fields from all BF schemas"
+        description="Endpoint for getting all fields from all BF schemas"
     )
     benefit_plan_history = OrderedDjangoFilterConnectionField(
         BenefitPlanHistoryGQLType,
@@ -195,29 +204,38 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
     )
 
     def resolve_bf_code_validity(self, info, **kwargs):
-        if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
+        perms = SocialProtectionConfig.gql_benefit_plan_search_perms
+        if not info.context.user.has_perms(perms):
             raise PermissionDenied(_("unauthorized"))
         errors = validate_bf_unique_code(kwargs['bf_code'])
         if errors:
-            return ValidationMessageGQLType(False, error_message=errors[0]['message'])
+            return ValidationMessageGQLType(
+                False, error_message=errors[0]['message']
+            )
         else:
             return ValidationMessageGQLType(True)
 
     def resolve_bf_name_validity(self, info, **kwargs):
-        if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
+        perms = SocialProtectionConfig.gql_benefit_plan_search_perms
+        if not info.context.user.has_perms(perms):
             raise PermissionDenied(_("unauthorized"))
         errors = validate_bf_unique_name(kwargs['bf_name'])
         if errors:
-            return ValidationMessageGQLType(False, error_message=errors[0]['message'])
+            return ValidationMessageGQLType(
+                False, error_message=errors[0]['message']
+            )
         else:
             return ValidationMessageGQLType(True)
 
     def resolve_bf_schema_validity(self, info, **kwargs):
-        if not info.context.user.has_perms(SocialProtectionConfig.gql_benefit_plan_search_perms):
+        perms = SocialProtectionConfig.gql_benefit_plan_search_perms
+        if not info.context.user.has_perms(perms):
             raise PermissionDenied(_("unauthorized"))
         errors = validate_json_schema(kwargs['bf_schema'])
         if errors:
-            return ValidationMessageGQLType(False, error_message=errors[0]['message'])
+            return ValidationMessageGQLType(
+                False, error_message=errors[0]['message']
+            )
         else:
             return ValidationMessageGQLType(True)
 
@@ -229,20 +247,25 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
             search_terms = search.split(' ')
             search_queries = Q()
             for term in search_terms:
-                search_queries |= Q(code__icontains=term) | Q(name__icontains=term)
+                search_queries |= (
+                    Q(code__icontains=term) | Q(name__icontains=term)
+                )
             filters.append(search_queries)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
         individual_id = kwargs.get("individual_id", None)
         if individual_id:
-            filters.append(Q(
-                Q(beneficiary__individual__id=individual_id) |
-                Q(groupbeneficiary__group__groupindividuals__individual__id=individual_id)
-            ))
+            individual_filter = (
+                Q(beneficiary__individual__id=individual_id)
+                | Q(groupbeneficiary__group__groupindividuals__individual__id=individual_id)  # noqa: E501
+            )
+            filters.append(Q(individual_filter))
 
         group_id = kwargs.get("group_id", None)
         if group_id:
@@ -250,7 +273,10 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
 
         beneficiary_status = kwargs.get("beneficiary_status", None)
         if beneficiary_status:
-            filters.append(Q(beneficiary__status=beneficiary_status) | Q(groupbeneficiary__status=beneficiary_status))
+            filters.append(
+                Q(beneficiary__status=beneficiary_status)
+                | Q(groupbeneficiary__status=beneficiary_status)
+            )
 
         Query._check_permissions(
             info.context.user,
@@ -270,7 +296,10 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
 
             client_mutation_id = kwargs.get("client_mutation_id")
             if client_mutation_id:
-                filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+                mutation_filter = Q(
+                    mutations__mutation__client_mutation_id=client_mutation_id
+                )
+                filters.append(mutation_filter)
 
             Query._check_permissions(
                 info.context.user,
@@ -281,45 +310,53 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         def _apply_custom_filters(query, **kwargs):
             custom_filters = kwargs.get("customFilters")
             if custom_filters:
-                query = CustomFilterWizardStorage.build_custom_filters_queryset(
-                    Query.module_name,
-                    Query.object_type,
-                    custom_filters,
-                    query
-                )
+                query = CustomFilterWizardStorage \
+                    .build_custom_filters_queryset(
+                        Query.module_name,
+                        Query.object_type,
+                        custom_filters,
+                        query
+                    )
             return query
 
         def _get_eligible_uuids(query, info, **kwargs):
             status = kwargs.get("status")
             benefit_plan_id = kwargs.get("benefit_plan__id")
-            default_results = (set(), False)  # No eligibility check was performed
+            default_results = (set(), False)
 
             if not status or not benefit_plan_id:
                 return default_results
 
-            benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).first()
-            if not benefit_plan:
+            bp = BenefitPlan.objects.filter(id=benefit_plan_id).first()
+            if not bp:
                 return default_results
 
-            eligibility_filters = (benefit_plan.json_ext or {}).get('advanced_criteria', {}).get(status)
+            advanced = (bp.json_ext or {}).get('advanced_criteria', {})
+            eligibility_filters = advanced.get(status)
             if not eligibility_filters:
                 return default_results
 
-            query_eligible = CustomFilterWizardStorage.build_custom_filters_queryset(
-                Query.module_name,
-                Query.object_type,
-                eligibility_filters,
-                query
-            )
+            query_eligible = CustomFilterWizardStorage \
+                .build_custom_filters_queryset(
+                    Query.module_name,
+                    Query.object_type,
+                    eligibility_filters,
+                    query
+                )
             eligible_beneficiaries = gql_optimizer.query(query_eligible, info)
-            eligible_uuids = set(eligible_beneficiaries.values_list('uuid', flat=True))
-            return eligible_uuids, True  # Eligibility check was performed
+            eligible_uuids = set(
+                eligible_beneficiaries.values_list('uuid', flat=True)
+            )
+            return eligible_uuids, True
 
-        def _annotate_is_eligible(query, eligible_uuids, eligibility_check_performed):
+        def _annotate_is_eligible(query, eligible_uuids, check_performed):
             return query.annotate(
                 is_eligible=Case(
                     When(uuid__in=eligible_uuids, then=Value(True)),
-                    When(~Q(uuid__in=eligible_uuids) & Value(eligibility_check_performed), then=Value(False)),
+                    When(
+                        ~Q(uuid__in=eligible_uuids) & Value(check_performed),
+                        then=Value(False)
+                    ),
                     default=Value(None),
                     output_field=BooleanField()
                 )
@@ -330,17 +367,23 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         parent_location = kwargs.get('parent_location')
         parent_location_level = kwargs.get('parent_location_level')
         if parent_location is not None and parent_location_level is not None:
-            filters.append(Query._get_location_filters(parent_location, parent_location_level, prefix='individual__'))
+            filters.append(Query._get_location_filters(
+                parent_location, parent_location_level, prefix='individual__'
+            ))
 
         location_id = kwargs.pop("village_or_child_of", None)
         if location_id is not None:
-            filters.append(Query._get_location_filters_v2(location_id, 'individual'))
+            filters.append(
+                Query._get_location_filters_v2(location_id, 'individual')
+            )
 
         query = Beneficiary.get_queryset(None, info.context.user)
         query = _apply_custom_filters(query.filter(*filters), **kwargs)
 
-        eligible_uuids, eligibility_check_performed = _get_eligible_uuids(query, info, **kwargs)
-        query = _annotate_is_eligible(query, eligible_uuids, eligibility_check_performed)
+        eligible_uuids, check_performed = _get_eligible_uuids(
+            query, info, **kwargs
+        )
+        query = _annotate_is_eligible(query, eligible_uuids, check_performed)
 
         return gql_optimizer.query(query, info)
 
@@ -350,7 +393,10 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
 
             client_mutation_id = kwargs.get("client_mutation_id")
             if client_mutation_id:
-                filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+                mutation_filter = Q(
+                    mutations__mutation__client_mutation_id=client_mutation_id
+                )
+                filters.append(mutation_filter)
 
             Query._check_permissions(
                 info.context.user,
@@ -361,47 +407,57 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         def _apply_custom_filters(query, **kwargs):
             custom_filters = kwargs.get("customFilters")
             if custom_filters:
-                query = CustomFilterWizardStorage.build_custom_filters_queryset(
-                    Query.module_name,
-                    Query.object_type,
-                    custom_filters,
-                    query,
-                    "group__groupindividuals__individual",
-                )
+                query = CustomFilterWizardStorage \
+                    .build_custom_filters_queryset(
+                        Query.module_name,
+                        Query.object_type,
+                        custom_filters,
+                        query,
+                        "group__groupindividuals__individual",
+                    )
             return query
 
         def _get_eligible_group_uuids(query, info, **kwargs):
             status = kwargs.get("status")
             benefit_plan_id = kwargs.get("benefit_plan__id")
-            default_results = (set(), False)  # No eligibility check was performed
+            default_results = (set(), False)
 
             if not status or not benefit_plan_id:
                 return default_results
 
-            benefit_plan = BenefitPlan.objects.filter(id=benefit_plan_id).first()
-            if not benefit_plan:
+            bp = BenefitPlan.objects.filter(id=benefit_plan_id).first()
+            if not bp:
                 return default_results
 
-            eligibility_filters = (benefit_plan.json_ext or {}).get('advanced_criteria', {}).get(status)
+            advanced = (bp.json_ext or {}).get('advanced_criteria', {})
+            eligibility_filters = advanced.get(status)
             if not eligibility_filters:
                 return default_results
 
-            query_eligible = CustomFilterWizardStorage.build_custom_filters_queryset(
-                Query.module_name,
-                Query.object_type,
-                eligibility_filters,
-                query,
-                "group__groupindividuals__individual",
+            query_eligible = CustomFilterWizardStorage \
+                .build_custom_filters_queryset(
+                    Query.module_name,
+                    Query.object_type,
+                    eligibility_filters,
+                    query,
+                    "group__groupindividuals__individual",
+                )
+            eligible_group_beneficiaries = gql_optimizer.query(
+                query_eligible, info
             )
-            eligible_group_beneficiaries = gql_optimizer.query(query_eligible, info)
-            eligible_group_uuids = set(eligible_group_beneficiaries.values_list('uuid', flat=True))
-            return eligible_group_uuids, True  # Eligibility check was performed
+            eligible_group_uuids = set(
+                eligible_group_beneficiaries.values_list('uuid', flat=True)
+            )
+            return eligible_group_uuids, True
 
-        def _annotate_is_eligible(query, eligible_group_uuids, eligibility_check_performed):
+        def _annotate_is_eligible(query, eligible_uuids, check_performed):
             return query.annotate(
                 is_eligible=Case(
-                    When(uuid__in=eligible_group_uuids, then=Value(True)),
-                    When(~Q(uuid__in=eligible_group_uuids) & Value(eligibility_check_performed), then=Value(False)),
+                    When(uuid__in=eligible_uuids, then=Value(True)),
+                    When(
+                        ~Q(uuid__in=eligible_uuids) & Value(check_performed),
+                        then=Value(False)
+                    ),
                     default=Value(None),
                     output_field=BooleanField()
                 )
@@ -412,17 +468,41 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         parent_location = kwargs.get('parent_location')
         parent_location_level = kwargs.get('parent_location_level')
         if parent_location is not None and parent_location_level is not None:
-            filters.append(Query._get_location_filters(parent_location, parent_location_level, prefix='group__'))
+            filters.append(Query._get_location_filters(
+                parent_location, parent_location_level, prefix='group__'
+            ))
 
         location_id = kwargs.pop("village_or_child_of", None)
         if location_id is not None:
-            filters.append(Query._get_location_filters_v2(location_id, 'group'))
+            filters.append(
+                Query._get_location_filters_v2(location_id, 'group')
+            )
 
         query = GroupBeneficiary.get_queryset(None, info.context.user)
         query = _apply_custom_filters(query.filter(*filters), **kwargs)
 
-        eligible_group_uuids, eligibility_check_performed = _get_eligible_group_uuids(query, info, **kwargs)
-        query = _annotate_is_eligible(query, eligible_group_uuids, eligibility_check_performed)
+        eligible_group_uuids, check_performed = _get_eligible_group_uuids(
+            query, info, **kwargs
+        )
+        query = _annotate_is_eligible(
+            query, eligible_group_uuids, check_performed
+        )
+
+        # Annotate head fields for ordering support
+        head_subquery = GroupIndividual.objects.filter(
+            group_id=OuterRef('group_id'),
+            role=GroupIndividual.Role.HEAD,
+            is_deleted=False
+        )
+        query = query.annotate(
+            head_first_name=Subquery(
+                head_subquery.values('individual__first_name')[:1]
+            ),
+            head_last_name=Subquery(
+                head_subquery.values('individual__last_name')[:1]
+            ),
+            head_dob=Subquery(head_subquery.values('individual__dob')[:1]),
+        )
 
         return gql_optimizer.query(query, info)
 
@@ -432,7 +512,9 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
         Query._check_permissions(
             info.context.user,
@@ -447,7 +529,9 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
         Query._check_permissions(
             info.context.user,
@@ -473,7 +557,8 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
 
     @staticmethod
     def _check_permissions(user, permission):
-        if type(user) is AnonymousUser or not user.id or not user.has_perms(permission):
+        is_anon = type(user) is AnonymousUser
+        if is_anon or not user.id or not user.has_perms(permission):
             raise PermissionError("Unauthorized")
 
     def resolve_benefit_plan_history(self, info, **kwargs):
@@ -484,13 +569,17 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
             search_terms = search.split(' ')
             search_queries = Q()
             for term in search_terms:
-                search_queries |= Q(code__icontains=term) | Q(name__icontains=term)
+                search_queries |= (
+                    Q(code__icontains=term) | Q(name__icontains=term)
+                )
             filters.append(search_queries)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
         individual_id = kwargs.get("individual_id", None)
         if individual_id:
@@ -502,7 +591,10 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
 
         beneficiary_status = kwargs.get("beneficiary_status", None)
         if beneficiary_status:
-            filters.append(Q(beneficiary__status=beneficiary_status) | Q(groupbeneficiary__status=beneficiary_status))
+            filters.append(
+                Q(beneficiary__status=beneficiary_status)
+                | Q(groupbeneficiary__status=beneficiary_status)
+            )
 
         Query._check_permissions(
             info.context.user,
@@ -517,16 +609,19 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         return gql_optimizer.query(query, info)
 
     @staticmethod
-    def _get_location_filters(parent_location, parent_location_level, prefix=""):
+    def _get_location_filters(parent_location, parent_location_level,
+                              prefix=""):
         query_key = "uuid"
-        for i in range(len(LocationConfig.location_types) - parent_location_level - 1):
+        loc_types_len = len(LocationConfig.location_types)
+        for i in range(loc_types_len - parent_location_level - 1):
             query_key = "parent__" + query_key
         query_key = prefix + "location__" + query_key
         return Q(**{query_key: parent_location})
 
     @staticmethod
     def _get_location_filters_v2(location_id, prefix):
-        village_ids = [v.id for v in Location.objects.children(location_id, loc_type="V")]
+        children = Location.objects.children(location_id, loc_type="V")
+        village_ids = [v.id for v in children]
         root = Location.objects.get(id=location_id)
         if root.type == "V":
             village_ids.append(root.id)
@@ -554,7 +649,9 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
         parent_location = kwargs.get('parent_location')
         if parent_location is not None:
@@ -566,11 +663,16 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         return gql_optimizer.query(query, info)
 
     def resolve_project_name_validity(self, info, **kwargs):
-        if not info.context.user.has_perms(SocialProtectionConfig.gql_project_search_perms):
+        perms = SocialProtectionConfig.gql_project_search_perms
+        if not info.context.user.has_perms(perms):
             raise PermissionDenied(_("unauthorized"))
-        errors = validate_project_unique_name(kwargs['project_name'], kwargs['benefit_plan_id'])
+        errors = validate_project_unique_name(
+            kwargs['project_name'], kwargs['benefit_plan_id']
+        )
         if errors:
-            return ValidationMessageGQLType(False, error_message=errors[0]['message'])
+            return ValidationMessageGQLType(
+                False, error_message=errors[0]['message']
+            )
         else:
             return ValidationMessageGQLType(True)
 
@@ -588,7 +690,9 @@ class Query(ExportableSocialProtectionQueryMixin, graphene.ObjectType):
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
         Query._check_permissions(
             info.context.user,
@@ -623,3 +727,10 @@ class Mutation(graphene.ObjectType):
     undo_delete_project = UndoDeleteProjectMutation.Field()
     enroll_project = ProjectEnrollmentMutation.Field()
     enroll_group_project = ProjectGroupEnrollmentMutation.Field()
+
+    bulk_update_beneficiary_time_entries = (
+        BulkUpdateBeneficiaryTimeEntriesMutation.Field()
+    )
+    bulk_update_group_beneficiary_time_entries = (
+        BulkUpdateGroupBeneficiaryTimeEntriesMutation.Field()
+    )

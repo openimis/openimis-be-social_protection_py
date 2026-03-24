@@ -10,11 +10,13 @@ from core.schema import OpenIMISMutation
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan, Project, ProjectMutation, Activity,
-    Beneficiary, GroupBeneficiary, BeneficiaryStatus, BenefitPlanMutation
+    Beneficiary, GroupBeneficiary, BeneficiaryStatus, BenefitPlanMutation,
+    BeneficiaryProjectTimeEntry, GroupBeneficiaryProjectTimeEntry
 )
 from social_protection.services import (
     BenefitPlanService, ProjectService,
-    BeneficiaryService, GroupBeneficiaryService
+    BeneficiaryService, GroupBeneficiaryService,
+    ProjectEnrollmentService
 )
 from location.models import Location
 
@@ -619,7 +621,7 @@ class ProjectEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
     def _validate_mutation(cls, user, **data):
         super()._validate_mutation(user, **data)
         if not user.has_perms(
-                SocialProtectionConfig.gql_project_update_perms):
+                SocialProtectionConfig.gql_project_beneficiary_enroll_perms):
             raise PermissionDenied(_("unauthorized"))
 
     @classmethod
@@ -629,7 +631,7 @@ class ProjectEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        return BeneficiaryService(user).enroll_project(data)
+        return ProjectEnrollmentService(user, ProjectEnrollmentService.INDIVIDUAL).enroll_project(data)
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
@@ -645,7 +647,7 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
     def _validate_mutation(cls, user, **data):
         super()._validate_mutation(user, **data)
         if not user.has_perms(
-                SocialProtectionConfig.gql_project_update_perms):
+                SocialProtectionConfig.gql_project_beneficiary_enroll_perms):
             raise PermissionDenied(_("unauthorized"))
 
     @classmethod
@@ -655,8 +657,67 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        return GroupBeneficiaryService(user).enroll_project(data)
+        return ProjectEnrollmentService(user, ProjectEnrollmentService.GROUP).enroll_project(data)
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
         project_id = graphene.UUID(required=True)
+
+
+class TimeEntryInputType(graphene.InputObjectType):
+    id = graphene.UUID(required=False)
+    enrollment_id = graphene.UUID(required=True)
+    day_number = graphene.Int(required=True)
+    percent_complete = graphene.Int(required=True)
+
+
+class BulkUpdateBeneficiaryTimeEntriesMutation(BaseMutation):
+    _mutation_class = "BulkUpdateBeneficiaryTimeEntriesMutation"
+    _mutation_module = "social_protection"
+    _model = BeneficiaryProjectTimeEntry
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if isinstance(user, AnonymousUser):
+            raise ValidationError("mutation.authentication_required")
+        if not user.has_perms(SocialProtectionConfig.gql_project_beneficiary_time_entry_perms):
+            raise ValidationError("mutation.unauthorized")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = ProjectEnrollmentService(user, ProjectEnrollmentService.INDIVIDUAL)
+        service.bulk_update_time_entries(data)
+
+    class Input(OpenIMISMutation.Input):
+        time_entries = graphene.List(TimeEntryInputType, required=True)
+
+
+class BulkUpdateGroupBeneficiaryTimeEntriesMutation(BaseMutation):
+    _mutation_class = "BulkUpdateGroupBeneficiaryTimeEntriesMutation"
+    _mutation_module = "social_protection"
+    _model = GroupBeneficiaryProjectTimeEntry
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if isinstance(user, AnonymousUser):
+            raise ValidationError("mutation.authentication_required")
+        if not user.has_perms(SocialProtectionConfig.gql_project_beneficiary_time_entry_perms):
+            raise ValidationError("mutation.unauthorized")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = ProjectEnrollmentService(user, ProjectEnrollmentService.GROUP)
+        service.bulk_update_time_entries(data)
+
+    class Input(OpenIMISMutation.Input):
+        time_entries = graphene.List(TimeEntryInputType, required=True)

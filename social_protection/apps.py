@@ -28,6 +28,8 @@ DEFAULT_CONFIG = {
     "gql_project_create_perms": ["209002"],
     "gql_project_update_perms": ["209003"],
     "gql_project_delete_perms": ["209004"],
+    "gql_project_beneficiary_enroll_perms": ["209005"],
+    "gql_project_beneficiary_time_entry_perms": ["209006"],
 
 
     # Create task for model instead of performing crud action
@@ -92,6 +94,8 @@ class SocialProtectionConfig(AppConfig):
     gql_project_create_perms = None
     gql_project_update_perms = None
     gql_project_delete_perms = None
+    gql_project_beneficiary_enroll_perms = None
+    gql_project_beneficiary_time_entry_perms = None
 
     gql_check_benefit_plan_update = None
     gql_check_beneficiary_crud = None
