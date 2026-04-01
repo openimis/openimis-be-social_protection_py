@@ -1,9 +1,10 @@
 # flake8: noqa
-from .beneficiary_service_test import BeneficiaryServiceTest
+from .beneficiary_service_test import *
 from .benefit_plan_service_test import BenefitPlanServiceTest
-from .group_beneficiary_service_test import GroupBeneficiaryServiceTest
+from .group_beneficiary_service_test import *
 from .beneficiary_import_service_test import BeneficiaryImportServiceTest
 from .beneficiary_gql_test import BeneficiaryGQLTest
+from .group_beneficiary_gql_test import GroupBeneficiaryGQLTest
 from .test_workflows_beneficiaries_upload import ProcessImportBeneficiariesWorkflowTest
 from .test_workflows_beneficiaries_update import ProcessUpdateBeneficiariesWorkflowTest
 from .activity_gql_test import ActivitiesGQLTest
