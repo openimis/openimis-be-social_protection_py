@@ -2,8 +2,8 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 from core.utils import validate_json_schema
-from core.validation import BaseModelValidation
-from social_protection.models import Beneficiary, BenefitPlan
+from core.validation import BaseModelValidation, ObjectExistsValidationMixin
+from social_protection.models import Beneficiary, BenefitPlan, Project
 
 
 class BenefitPlanValidation(BaseModelValidation):
@@ -47,7 +47,7 @@ def validate_benefit_plan(data, uuid=None):
 def validate_bf_unique_code(code, uuid=None):
     instance = BenefitPlan.objects.filter(code=code, is_deleted=False).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.benefit_plan.code_exists" % {
+        return [{"message": _("social_protection.validation.benefit_plan.code_exists" % {  # noqa: F504
             'code': code
         })}]
     return []
@@ -56,7 +56,7 @@ def validate_bf_unique_code(code, uuid=None):
 def validate_bf_unique_name(name, uuid=None):
     instance = BenefitPlan.objects.filter(name=name, is_deleted=False).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.benefit_plan.name_exists" % {
+        return [{"message": _("social_protection.validation.benefit_plan.name_exists" % {  # noqa: F504
             'name': name
         })}]
     return []
@@ -76,3 +76,22 @@ class BeneficiaryValidation(BaseModelValidation):
 
 class GroupBeneficiaryValidation(BaseModelValidation):
     OBJECT_TYPE = Beneficiary
+
+
+def validate_project_unique_name(name, benefit_plan_id, uuid=None):
+    instance = Project.objects.filter(
+        name=name, benefit_plan__id=benefit_plan_id, is_deleted=False
+    ).exclude(id=uuid).first()
+    if instance:
+        return [{"message": _("social_protection.validation.project.name_exists" % {   # noqa: F504
+            'name': name
+        })}]
+    return []
+
+
+class ProjectValidation(BaseModelValidation, ObjectExistsValidationMixin):
+    OBJECT_TYPE = Project
+
+    @classmethod
+    def validate_undo_delete(cls, data):
+        cls.validate_object_exists(data.get('id'))

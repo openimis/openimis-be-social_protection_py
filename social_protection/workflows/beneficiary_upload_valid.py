@@ -71,7 +71,7 @@ BEGIN
                             'failing_entries_invalid_json', failing_entries_invalid_json
                         ))
         WHERE "UUID" = current_upload_id;
-        
+
         UPDATE individual_individualdatasourceupload SET status = 'FAIL' WHERE "UUID" = current_upload_id;
     ELSE
         -- If no invalid entries, then proceed with the data manipulation
@@ -93,8 +93,8 @@ BEGIN
                     AND loc."LocationType"='V'
                     AND loc."ValidityTo" IS NULL
             WHERE ds.upload_id = current_upload_id
-                AND ds.individual_id IS NULL 
-                AND ds."isDeleted" = False 
+                AND ds.individual_id IS NULL
+                AND ds."isDeleted" = False
                 AND ds.validations ->> 'validation_errors' = '[]'
             RETURNING "UUID", "Json_ext"
         )
@@ -106,7 +106,7 @@ BEGIN
           AND individual_individualdatasource."isDeleted" = False
           AND individual_individualdatasource."Json_ext" = ne."Json_ext"
           AND validations ->> 'validation_errors' = '[]';
-        
+
         with new_entry_2 as (INSERT INTO social_protection_beneficiary(
         "UUID", "isDeleted", "Json_ext", "DateCreated", "DateUpdated", version, "DateValidFrom", "DateValidTo", status, "benefit_plan_id", "individual_id", "UserCreatedUUID", "UserUpdatedUUID"
         )
@@ -114,7 +114,7 @@ BEGIN
         FROM individual_individualdatasource iids right join individual_individual new_entry on new_entry."UUID" = iids.individual_id
         WHERE iids.upload_id=current_upload_id and iids."isDeleted"=false
         returning "UUID")
-        
+
         -- Calculate counts of valid and total entries
         SELECT count(*) INTO total_valid_entries
         FROM individual_individualdatasource
@@ -125,10 +125,10 @@ BEGIN
         FROM individual_individualdatasource
         WHERE upload_id = current_upload_id
           AND "isDeleted" = FALSE;
-        
-        -- Change status to SUCCESS if no invalid items, change to PARTIAL_SUCCESS otherwise 
+
+        -- Change status to SUCCESS if no invalid items, change to PARTIAL_SUCCESS otherwise
             UPDATE individual_individualdatasourceupload
-            SET 
+            SET
                 status = CASE
                     WHEN total_valid_entries = total_entries THEN 'SUCCESS'
                     ELSE 'PARTIAL_SUCCESS'
@@ -226,7 +226,7 @@ BEGIN
                     AND loc."LocationCode" = ds."Json_ext"->>'location_code'
                     AND loc."LocationType"='V'
                     AND loc."ValidityTo" IS NULL
-            WHERE ds.upload_id = current_upload_id 
+            WHERE ds.upload_id = current_upload_id
                 AND ds.individual_id IS NULL
                 AND ds."isDeleted" = False
                 AND ds.validations ->> 'validation_errors' = '[]'
@@ -332,8 +332,8 @@ BEGIN
                     AND loc."LocationType"='V'
                     AND loc."ValidityTo" IS NULL
             WHERE ds.upload_id = current_upload_id
-                AND ds.individual_id IS NULL 
-                AND ds."isDeleted" = False 
+                AND ds.individual_id IS NULL
+                AND ds."isDeleted" = False
                 AND ds.validations ->> 'validation_errors' = '[]'
             RETURNING "UUID", "Json_ext"
         )
@@ -357,9 +357,9 @@ BEGIN
         WHERE upload_id = current_upload_id
           AND "isDeleted" = FALSE;
 
-        -- Change status to SUCCESS if no invalid items, change to PARTIAL_SUCCESS otherwise 
+        -- Change status to SUCCESS if no invalid items, change to PARTIAL_SUCCESS otherwise
             UPDATE individual_individualdatasourceupload
-            SET 
+            SET
                 status = CASE
                     WHEN total_valid_entries = total_entries THEN 'SUCCESS'
                     ELSE 'PARTIAL_SUCCESS'
@@ -458,7 +458,7 @@ BEGIN
                     AND loc."LocationCode" = ds."Json_ext"->>'location_code'
                     AND loc."LocationType"='V'
                     AND loc."ValidityTo" IS NULL
-            WHERE ds.upload_id = current_upload_id 
+            WHERE ds.upload_id = current_upload_id
                 AND ds.individual_id IS NULL
                 AND ds."isDeleted" = False
                 AND ds.validations ->> 'validation_errors' = '[]'

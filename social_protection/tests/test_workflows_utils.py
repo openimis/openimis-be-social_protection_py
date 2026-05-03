@@ -1,18 +1,18 @@
 from django.test import TestCase
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from core.test_helpers import create_test_interactive_user
 from social_protection.workflows.utils import SqlProcedurePythonWorkflow, PythonWorkflowHandlerException
 import pandas as pd
-import json
 import uuid
 from social_protection.models import BenefitPlan
+
 
 class TestBasePythonWorkflowExecutor(TestCase):
 
     def setUp(self):
-        self.user = create_test_interactive_user(username="admin")
+        self.user = create_test_interactive_user(username='Admin')
         self.upload_id = uuid.uuid4()
-        
+
         self.plan_schema = {"properties": {}}
 
         # create BenefitPlan with the required fields and save with username
@@ -24,7 +24,7 @@ class TestBasePythonWorkflowExecutor(TestCase):
             beneficiary_data_schema=self.plan_schema
             # Add other required fields here
         )
-        self.benefit_plan.save(username=self.user.username)
+        self.benefit_plan.save(user=self.user)
 
         self.mock_load_dataframe = patch('social_protection.workflows.utils.load_dataframe').start()
         self.mock_load_dataframe.return_value = pd.DataFrame()
@@ -76,4 +76,3 @@ class TestBasePythonWorkflowExecutor(TestCase):
             self.executor.validate_dataframe_headers(is_update=True)
         except PythonWorkflowHandlerException:
             self.fail("validate_dataframe_headers() raised PythonWorkflowHandlerException unexpectedly!")
-

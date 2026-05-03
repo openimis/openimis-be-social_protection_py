@@ -36,3 +36,64 @@ msgstr "BenefitPlan name %(name) already exists"
 #: social_protection/validation.py:73
 msgid "social_protection.validation.field_empty"
 msgstr "%(field) can't be empty"
+
+msgid "social_protection.validation.project.name_exists"
+msgstr "Project name %(name) already exists"
+
+msgid "Invalid file type. Allowed: .csv, .xls, .xlsx"
+msgstr "Invalid file type. Allowed: .csv, .xls, .xlsx"
+
+msgid "Could not determine file type"
+msgstr "Could not determine file type"
+
+msgid "Invalid MIME type:"
+msgstr "Invalid MIME type:"
+
+#: models.py
+msgid "Beneficiary must be assigned to a project before recording time entries."
+msgstr "Beneficiary must be assigned to a project before recording time entries."
+
+#: models.py
+msgid "Day number must be between 1 and %(working_days)s."
+msgstr "Day number must be between 1 and %(working_days)s."
+
+#: models.py
+msgid "Beneficiary Project Time Entry"
+msgstr "Beneficiary Project Time Entry"
+
+#: models.py
+msgid "Beneficiary Project Time Entries"
+msgstr "Beneficiary Project Time Entries"
+
+#: models.py
+msgid "Group Beneficiary Project Time Entry"
+msgstr "Group Beneficiary Project Time Entry"
+
+#: models.py
+msgid "Group Beneficiary Project Time Entries"
+msgstr "Group Beneficiary Project Time Entries"
+
+#: services.py
+msgid "No time entries to update"
+msgstr "No time entries to update"
+
+#: services.py
+msgid "Project not found"
+msgstr "Project not found"
+
+#: services.py
+msgid "Invalid beneficiary IDs or not in project: %(ids)s"
+msgstr "Invalid beneficiary IDs or not in project: %(ids)s"
+
+#: services.py
+msgid "Invalid group beneficiary IDs or not in project: %(ids)s"
+msgstr "Invalid group beneficiary IDs or not in project: %(ids)s"
+
+#: services.py
+msgid "Created %(created)s, updated %(updated)s time entries"
+msgstr "Created %(created)s, updated %(updated)s time entries"
+
+#: services.py
+msgid "Percent complete must be between 0 and 100."
+msgstr "Percent complete must be between 0 and 100."
+

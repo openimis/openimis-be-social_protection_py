@@ -2,12 +2,14 @@
 
 from django.db import migrations
 
+
 def max_beneficiaries_replace_zeros_with_nulls(apps, schema_editor):
     BenefitPlan = apps.get_model("social_protection", "BenefitPlan")
     for benefit_plan in BenefitPlan.objects.filter(max_beneficiaries=0):
         benefit_plan.max_beneficiaries = None
         benefit_plan.save()
-    
+
+
 def max_beneficiaries_replace_nulls_with_zeros(apps, schema_editor):
     BenefitPlan = apps.get_model("social_protection", "BenefitPlan")
     for benefit_plan in BenefitPlan.objects.filter(max_beneficiaries__isnull=True):

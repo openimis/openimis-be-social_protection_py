@@ -1,13 +1,13 @@
-from django.conf import settings
-from django.contrib.auth.models import AnonymousUser
 from django.db import models
 from django.db.models import Func
 from django.utils.translation import gettext as _
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 from core import models as core_models
 from core.models import UUIDModel, ObjectMutation, MutationLog
 from individual.models import Individual, Group, IndividualDataSourceUpload
+from location.models import Location
 
 
 class BeneficiaryStatus(models.TextChoices):
@@ -44,6 +44,101 @@ class BenefitPlanMutation(UUIDModel, ObjectMutation):
     mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='benefit_plan')
 
 
+class Activity(core_models.HistoryBusinessModel):
+    name = models.CharField(max_length=255, null=False, unique=True)
+
+    class Meta:
+        verbose_name = "Activity"
+        verbose_name_plural = "Activities"
+
+
+class ProjectStatus(models.TextChoices):
+    PREPARATION = "PREPARATION", _("PREPARATION")
+    IN_PROGRESS = "IN_PROGRESS", _("IN PROGRESS")
+    COMPLETED = "COMPLETED", _("COMPLETED")
+
+
+class Project(core_models.HistoryBusinessModel):
+    benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
+    name = models.CharField(max_length=255, null=False)
+    status = models.CharField(
+        max_length=100,
+        choices=ProjectStatus.choices,
+        default=ProjectStatus.PREPARATION,
+        null=False
+    )
+    activity = models.ForeignKey(Activity, models.DO_NOTHING, null=False)
+    location = models.ForeignKey(Location, models.DO_NOTHING, null=False)
+    target_beneficiaries = models.SmallIntegerField(null=False)
+    working_days = models.SmallIntegerField(null=False)
+    allows_multiple_enrollments = models.BooleanField(default=False)
+
+
+class ProjectMutation(UUIDModel, ObjectMutation):
+    project = models.ForeignKey(Project, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='project')
+
+
+class BeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
+    beneficiary = models.ForeignKey(
+        'Beneficiary',
+        models.DO_NOTHING,
+        related_name='project_enrollments',
+        null=False,
+    )
+    project = models.ForeignKey(
+        Project,
+        models.DO_NOTHING,
+        related_name='beneficiary_enrollments',
+        null=False,
+    )
+
+    class Meta:
+        unique_together = ('beneficiary', 'project')
+        verbose_name = _("Beneficiary Project Enrollment")
+        verbose_name_plural = _("Beneficiary Project Enrollments")
+
+    def clean(self):
+        if self.beneficiary.status != BeneficiaryStatus.ACTIVE:
+            raise ValidationError(_("Only ACTIVE beneficiaries can be enrolled in a project."))
+        if self.project.benefit_plan_id != self.beneficiary.benefit_plan_id:
+            raise ValidationError(_("Beneficiary and project must belong to the same program."))
+        super().clean()
+
+    def __str__(self):
+        return f"{self.beneficiary} - {self.project.name}"
+
+
+class GroupBeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
+    group_beneficiary = models.ForeignKey(
+        'GroupBeneficiary',
+        models.DO_NOTHING,
+        related_name='project_enrollments',
+        null=False,
+    )
+    project = models.ForeignKey(
+        Project,
+        models.DO_NOTHING,
+        related_name='group_beneficiary_enrollments',
+        null=False,
+    )
+
+    class Meta:
+        unique_together = ('group_beneficiary', 'project')
+        verbose_name = _("Group Beneficiary Project Enrollment")
+        verbose_name_plural = _("Group Beneficiary Project Enrollments")
+
+    def clean(self):
+        if self.group_beneficiary.status != BeneficiaryStatus.ACTIVE:
+            raise ValidationError(_("Only ACTIVE group beneficiaries can be enrolled in a project."))
+        if self.project.benefit_plan_id != self.group_beneficiary.benefit_plan_id:
+            raise ValidationError(_("Group beneficiary and project must belong to the same program."))
+        super().clean()
+
+    def __str__(self):
+        return f"{self.group_beneficiary.group.code} - {self.project.name}"
+
+
 class Beneficiary(core_models.HistoryBusinessModel):
     individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
@@ -58,7 +153,7 @@ class Beneficiary(core_models.HistoryBusinessModel):
 
     def __str__(self):
         return f'{self.individual.first_name} {self.individual.last_name}'
-    
+
     @classmethod
     def get_queryset(cls, queryset, user):
         if queryset is None:
@@ -67,9 +162,80 @@ class Beneficiary(core_models.HistoryBusinessModel):
         individuals = Individual.objects.filter(
             id__in=queryset.values('individual_id')
         ).distinct()
-    
+
         individual_queryset = Individual.get_queryset(individuals, user)
         return queryset.filter(individual__in=individual_queryset)
+
+
+class AbstractProjectTimeEntry(core_models.HistoryBusinessModel):
+    """
+    Base model for recording daily percent completion for enrollments in projects.
+    Subclasses must implement `_get_enrollment_instance()`.
+    """
+    # Sequential workday number within the project (1..working_days).
+    day_number = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)])
+    # Percentage of work completed for this day (0–100).
+    percent_complete = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+
+    class Meta:
+        abstract = True
+
+    def _get_enrollment_instance(self):
+        """
+        Subclasses must override this to return the enrollment object.
+        """
+        raise NotImplementedError("_get_enrollment_instance() must be implemented in subclass")
+
+    def clean(self):
+        enrollment = self._get_enrollment_instance()
+        project = enrollment.project
+
+        if not 1 <= self.day_number <= project.working_days:
+            raise ValidationError(
+                _("Day number must be between 1 and %(working_days)s.") % {"working_days": project.working_days}
+            )
+
+        super().clean()
+
+    def __str__(self):
+        enrollment = self._get_enrollment_instance()
+        return f"{enrollment} - Day {self.day_number}: {self.percent_complete}%"
+
+
+class BeneficiaryProjectTimeEntry(AbstractProjectTimeEntry):
+    enrollment = models.ForeignKey(
+        'BeneficiaryProjectEnrollment',
+        models.DO_NOTHING,
+        related_name='time_entries',
+        null=False,
+    )
+
+    class Meta:
+        unique_together = ('enrollment', 'day_number')
+        verbose_name = _("Beneficiary Project Time Entry")
+        verbose_name_plural = _("Beneficiary Project Time Entries")
+
+    def _get_enrollment_instance(self):
+        return self.enrollment
+
+
+class GroupBeneficiaryProjectTimeEntry(AbstractProjectTimeEntry):
+    enrollment = models.ForeignKey(
+        'GroupBeneficiaryProjectEnrollment',
+        models.DO_NOTHING,
+        related_name='time_entries',
+        null=False,
+    )
+
+    class Meta:
+        unique_together = ('enrollment', 'day_number')
+        verbose_name = _("Group Beneficiary Project Time Entry")
+        verbose_name_plural = _("Group Beneficiary Project Time Entries")
+
+    def _get_enrollment_instance(self):
+        return self.enrollment
 
 
 class BenefitPlanDataUploadRecords(core_models.HistoryModel):
@@ -91,9 +257,8 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
     def clean(self):
         if self.benefit_plan.type != BenefitPlan.BenefitPlanType.GROUP_TYPE:
             raise ValidationError(_("Group beneficiary must be associated with a benefit plan type = GROUP."))
-
         super().clean()
-    
+
     @classmethod
     def get_queryset(cls, queryset, user):
         if queryset is None:
@@ -102,7 +267,7 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
         groups = Group.objects.filter(
             id__in=queryset.values('group_id')
         ).distinct()
-    
+
         group_queryset = Group.get_queryset(groups, user)
         return queryset.filter(group__in=group_queryset)
 

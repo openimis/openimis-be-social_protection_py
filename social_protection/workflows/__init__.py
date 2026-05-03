@@ -20,6 +20,7 @@ Development Use and Efficiency Considerations
     They serve as a foundational guide for developing more robust, production-ready solutions.
 
 """
+# flake8: noqa
 from social_protection.workflows.base_beneficiary_upload import process_import_beneficiaries_workflow
 from social_protection.workflows.base_beneficiary_update import process_update_beneficiaries_workflow
 
