@@ -1,6 +1,7 @@
 import copy
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from social_protection.models import BenefitPlan
@@ -138,5 +139,5 @@ class BenefitPlanServiceTest(TestCase):
         )
 
     def test_undo_delete_benefit_plan_nonexistent(self):
-        result = self.service.undo_delete({'id': uuid.uuid4()})
-        self.assertFalse(result.get('success', True))
+        with self.assertRaises(ValidationError):
+            self.service.undo_delete({'id': uuid.uuid4()})

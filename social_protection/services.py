@@ -74,25 +74,17 @@ class BenefitPlanService(BaseService, UpdateCheckerLogicServiceMixin):
 
     @register_service_signal('benefit_plan_service.undo_delete')
     def undo_delete(self, obj_data):
-        try:
-            with transaction.atomic():
-                self.validation_class.validate_undo_delete(obj_data)
-                obj_ = self.OBJECT_TYPE.objects.filter(
-                    id=obj_data['id']
-                ).first()
-                obj_.is_deleted = False
-                obj_.save(user=self.user)
-                return {
-                    "success": True,
-                    "message": "Ok",
-                    "details": "",
-                }
-        except Exception as exc:
-            return output_exception(
-                model_name=self.OBJECT_TYPE.__name__,
-                method="undo_delete",
-                exception=exc
-            )
+        self.validation_class.validate_undo_delete(obj_data)
+        obj_ = self.OBJECT_TYPE.objects.filter(
+            id=obj_data['id']
+        ).first()
+        obj_.is_deleted = False
+        obj_.save(user=self.user)
+        return {
+            "success": True,
+            "message": "Ok",
+            "detail": "",
+        }
 
     @register_service_signal('benefit_plan_service.close')
     def close_benefit_plan(self, obj_data):
@@ -907,22 +899,14 @@ class ProjectService(BaseService):
 
     @register_service_signal('project_service.undo_delete')
     def undo_delete(self, obj_data):
-        try:
-            with transaction.atomic():
-                self.validation_class.validate_undo_delete(obj_data)
-                obj_ = self.OBJECT_TYPE.objects.filter(
-                    id=obj_data['id']
-                ).first()
-                obj_.is_deleted = False
-                obj_.save(user=self.user)
-                return {
-                    "success": True,
-                    "message": "Ok",
-                    "detail": "Undo Delete",
-                }
-        except Exception as exc:
-            return output_exception(
-                model_name=self.OBJECT_TYPE.__name__,
-                method="undo_delete",
-                exception=exc
-            )
+        self.validation_class.validate_undo_delete(obj_data)
+        obj_ = self.OBJECT_TYPE.objects.filter(
+            id=obj_data['id']
+        ).first()
+        obj_.is_deleted = False
+        obj_.save(user=self.user)
+        return {
+            "success": True,
+            "message": "Ok",
+            "detail": "Undo Delete",
+        }
