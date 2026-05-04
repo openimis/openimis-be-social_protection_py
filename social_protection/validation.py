@@ -30,7 +30,15 @@ class BenefitPlanValidation(BaseModelValidation, ObjectExistsValidationMixin):
 
     @classmethod
     def validate_undo_delete(cls, data):
-        cls.validate_object_exists(data.get('id'))
+        obj_id = data.get('id')
+        cls.validate_object_exists(obj_id)
+        obj = BenefitPlan.objects.get(id=obj_id)
+        errors = [
+            *validate_bf_unique_code(obj.code, obj_id),
+            *validate_bf_unique_name(obj.name, obj_id),
+        ]
+        if errors:
+            raise ValidationError(errors)
 
 
 def validate_benefit_plan(data, uuid=None):
@@ -99,4 +107,11 @@ class ProjectValidation(BaseModelValidation, ObjectExistsValidationMixin):
 
     @classmethod
     def validate_undo_delete(cls, data):
-        cls.validate_object_exists(data.get('id'))
+        obj_id = data.get('id')
+        cls.validate_object_exists(obj_id)
+        obj = Project.objects.get(id=obj_id)
+        errors = validate_project_unique_name(
+            obj.name, obj.benefit_plan_id, obj_id
+        )
+        if errors:
+            raise ValidationError(errors)

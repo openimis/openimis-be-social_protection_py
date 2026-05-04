@@ -141,3 +141,17 @@ class BenefitPlanServiceTest(TestCase):
     def test_undo_delete_benefit_plan_nonexistent(self):
         with self.assertRaises(ValidationError):
             self.service.undo_delete({'id': uuid.uuid4()})
+
+    def test_undo_delete_benefit_plan_duplicate_code(self):
+        result = self.service.create(service_add_payload)
+        self.assertTrue(result.get('success', False))
+        bp_uuid = result.get('data', {}).get('uuid')
+
+        self.service.delete({'id': bp_uuid})
+
+        # Create another plan with the same code while the first is deleted
+        duplicate = self.service.create(service_add_payload)
+        self.assertTrue(duplicate.get('success', False))
+
+        with self.assertRaises(ValidationError):
+            self.service.undo_delete({'id': bp_uuid})
