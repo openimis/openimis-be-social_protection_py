@@ -4,7 +4,6 @@ import uuid
 from core.models import User
 from core.models.openimis_graphql_test_case import BaseTestContext
 from core.test_helpers import create_test_interactive_user, create_test_role
-from social_protection.models import BenefitPlan
 from social_protection.tests.test_helpers import (
     PatchedOpenIMISGraphQLTestCase,
     create_benefit_plan,
