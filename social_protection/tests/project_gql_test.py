@@ -499,6 +499,52 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         data = json.loads(response.content)['data']['undoDeleteProject']
         self.assert_mutation_error(data['internalId'], self.user_token, "does not exist")
 
+    def test_undo_delete_project_mutation_duplicate_name(self):
+        deleted = Project(
+            name="DupUndoName",
+            benefit_plan=self.benefit_plan,
+            activity=self.activity,
+            location=self.location,
+            target_beneficiaries=50,
+            working_days=30,
+            is_deleted=True,
+        )
+        deleted.save(username=self.user.username)
+
+        Project(
+            name="DupUndoName",
+            benefit_plan=self.benefit_plan,
+            activity=self.activity,
+            location=self.location,
+            target_beneficiaries=50,
+            working_days=30,
+        ).save(username=self.user.username)
+
+        mutation = """
+        mutation UndoDeleteProject($input: UndoDeleteProjectMutationInput!) {
+          undoDeleteProject(input: $input) {
+            clientMutationId
+            internalId
+          }
+        }
+        """
+        variables = {
+            "input": {
+                "ids": [str(deleted.id)],
+                "clientMutationId": "undo_dup"
+            }
+        }
+        response = self.query(
+            mutation,
+            variables=variables,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['undoDeleteProject']
+        self.assert_mutation_error(
+            data['internalId'], self.user_token, "name_exists"
+        )
+
     def test_project_history_query_success(self):
         query = """
         query {
