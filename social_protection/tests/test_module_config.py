@@ -13,7 +13,8 @@ class ModuleConfigTest(TestCase):
             config = ModuleConfiguration(module='social_protection', layer='be', config='{}')
         else:
             config.config = '{}'
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
 
         self.assertTrue(SocialProtectionConfig.gql_check_benefit_plan_update)
         self.assertTrue(SocialProtectionConfig.enable_maker_checker_logic_enrollment)
@@ -24,7 +25,8 @@ class ModuleConfigTest(TestCase):
             "enable_maker_checker_logic_enrollment": False,
         }
         config.config = json.dumps(updated_config)
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
 
         self.assertFalse(SocialProtectionConfig.gql_check_benefit_plan_update)
         self.assertFalse(SocialProtectionConfig.enable_maker_checker_logic_enrollment)

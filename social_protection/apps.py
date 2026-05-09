@@ -2,10 +2,10 @@ import logging
 import json
 
 from django.apps import AppConfig
-from django.db.models.signals import post_save
 
 from core.custom_filters import CustomFilterRegistryPoint
 from core.data_masking import MaskingClassRegistryPoint
+from core.module_config_registry import register_reloader
 
 logger = logging.getLogger(__name__)
 
@@ -132,27 +132,18 @@ class SocialProtectionConfig(AppConfig):
         self.__load_config(cfg)
         self._set_up_workflows()
         self.__register_masking_class()
-        self.__connect_signals()
+        register_reloader(self.name, self._reload_module_config)
 
-    def __connect_signals(self):
-        from core.models import ModuleConfiguration
-        post_save.connect(
-            self._reload_module_config,
-            sender=ModuleConfiguration,
-            weak=False
-        )
+    def _reload_module_config(self, instance):
+        db_config = json.loads(instance.config)
+        config = {**DEFAULT_CONFIG, **db_config}
+        self.__load_config(config)
 
-    def _reload_module_config(self, sender, instance, **kwargs):
-        if instance.module == self.name and instance.layer == 'be':
-            db_config = json.loads(instance.config)
-            config = {**DEFAULT_CONFIG, **db_config}
-            self.__load_config(config)
+        # Workflow needs to be re-registered, otherwise default/invalid ones would apply
+        self._set_up_workflows()
 
-            # Workflow needs to be re-registered, otherwise default/invalid ones would apply
-            self._set_up_workflows()
-
-            # TODO: handle reloading of masking configs
-            logger.info(f"Reloaded app configs (except masking configs) for {self.name} module")
+        # TODO: handle reloading of masking configs
+        logger.info(f"Reloaded app configs (except masking configs) for {self.name} module")
 
     def _set_up_workflows(self):
         from workflow.systems.python import PythonWorkflowAdaptor
