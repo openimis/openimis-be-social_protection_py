@@ -7,9 +7,9 @@ from social_protection.apps import SocialProtectionConfig
 class ModuleConfigTest(TestCase):
 
     def test_config_reloading(self):
-        # First set the individual config to be empty
-        config = ModuleConfiguration.objects.filter(module='social_protection', layer='be')
-        if not config:
+        # First set the social_protection config to be empty
+        config = ModuleConfiguration.objects.filter(module='social_protection', layer='be').first()
+        if config is None:
             config = ModuleConfiguration(module='social_protection', layer='be', config='{}')
         else:
             config.config = '{}'
