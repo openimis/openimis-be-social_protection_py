@@ -6,7 +6,7 @@ from core.validation import BaseModelValidation, ObjectExistsValidationMixin
 from social_protection.models import Beneficiary, BenefitPlan, Project
 
 
-class BenefitPlanValidation(BaseModelValidation):
+class BenefitPlanValidation(BaseModelValidation, ObjectExistsValidationMixin):
     OBJECT_TYPE = BenefitPlan
 
     @classmethod
@@ -28,6 +28,18 @@ class BenefitPlanValidation(BaseModelValidation):
     def validate_delete(cls, user, **data):
         super().validate_delete(user, **data)
 
+    @classmethod
+    def validate_undo_delete(cls, data):
+        obj_id = data.get('id')
+        cls.validate_object_exists(obj_id)
+        obj = BenefitPlan.objects.get(id=obj_id)
+        errors = [
+            *validate_bf_unique_code(obj.code, obj_id),
+            *validate_bf_unique_name(obj.name, obj_id),
+        ]
+        if errors:
+            raise ValidationError(errors)
+
 
 def validate_benefit_plan(data, uuid=None):
     validations = [
@@ -45,20 +57,22 @@ def validate_benefit_plan(data, uuid=None):
 
 
 def validate_bf_unique_code(code, uuid=None):
-    instance = BenefitPlan.objects.filter(code=code, is_deleted=False).exclude(id=uuid).first()
+    instance = BenefitPlan.objects.filter(
+        code=code, is_deleted=False
+    ).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.benefit_plan.code_exists" % {  # noqa: F504
-            'code': code
-        })}]
+        msg = "social_protection.validation.benefit_plan.code_exists"
+        return [{"message": _(msg % {'code': code})}]  # noqa: F504
     return []
 
 
 def validate_bf_unique_name(name, uuid=None):
-    instance = BenefitPlan.objects.filter(name=name, is_deleted=False).exclude(id=uuid).first()
+    instance = BenefitPlan.objects.filter(
+        name=name, is_deleted=False
+    ).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.benefit_plan.name_exists" % {  # noqa: F504
-            'name': name
-        })}]
+        msg = "social_protection.validation.benefit_plan.name_exists"
+        return [{"message": _(msg % {'name': name})}]  # noqa: F504
     return []
 
 
@@ -83,9 +97,8 @@ def validate_project_unique_name(name, benefit_plan_id, uuid=None):
         name=name, benefit_plan__id=benefit_plan_id, is_deleted=False
     ).exclude(id=uuid).first()
     if instance:
-        return [{"message": _("social_protection.validation.project.name_exists" % {   # noqa: F504
-            'name': name
-        })}]
+        msg = "social_protection.validation.project.name_exists"
+        return [{"message": _(msg % {'name': name})}]  # noqa: F504
     return []
 
 
@@ -94,4 +107,11 @@ class ProjectValidation(BaseModelValidation, ObjectExistsValidationMixin):
 
     @classmethod
     def validate_undo_delete(cls, data):
-        cls.validate_object_exists(data.get('id'))
+        obj_id = data.get('id')
+        cls.validate_object_exists(obj_id)
+        obj = Project.objects.get(id=obj_id)
+        errors = validate_project_unique_name(
+            obj.name, obj.benefit_plan_id, obj_id
+        )
+        if errors:
+            raise ValidationError(errors)
