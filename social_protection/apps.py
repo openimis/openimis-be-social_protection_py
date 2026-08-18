@@ -2,10 +2,10 @@ import logging
 import json
 
 from django.apps import AppConfig
-from django.db.models.signals import post_save
 
 from core.custom_filters import CustomFilterRegistryPoint
 from core.data_masking import MaskingClassRegistryPoint
+from core.module_config_registry import register_reloader
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,8 @@ DEFAULT_CONFIG = {
     "gql_project_create_perms": ["209002"],
     "gql_project_update_perms": ["209003"],
     "gql_project_delete_perms": ["209004"],
+    "gql_project_beneficiary_enroll_perms": ["209005"],
+    "gql_project_beneficiary_time_entry_perms": ["209006"],
 
 
     # Create task for model instead of performing crud action
@@ -92,6 +94,8 @@ class SocialProtectionConfig(AppConfig):
     gql_project_create_perms = None
     gql_project_update_perms = None
     gql_project_delete_perms = None
+    gql_project_beneficiary_enroll_perms = None
+    gql_project_beneficiary_time_entry_perms = None
 
     gql_check_benefit_plan_update = None
     gql_check_beneficiary_crud = None
@@ -128,27 +132,18 @@ class SocialProtectionConfig(AppConfig):
         self.__load_config(cfg)
         self._set_up_workflows()
         self.__register_masking_class()
-        self.__connect_signals()
+        register_reloader(self.name, self._reload_module_config)
 
-    def __connect_signals(self):
-        from core.models import ModuleConfiguration
-        post_save.connect(
-            self._reload_module_config,
-            sender=ModuleConfiguration,
-            weak=False
-        )
+    def _reload_module_config(self, instance):
+        db_config = json.loads(instance.config)
+        config = {**DEFAULT_CONFIG, **db_config}
+        self.__load_config(config)
 
-    def _reload_module_config(self, sender, instance, **kwargs):
-        if instance.module == self.name and instance.layer == 'be':
-            db_config = json.loads(instance.config)
-            config = {**DEFAULT_CONFIG, **db_config}
-            self.__load_config(config)
+        # Workflow needs to be re-registered, otherwise default/invalid ones would apply
+        self._set_up_workflows()
 
-            # Workflow needs to be re-registered, otherwise default/invalid ones would apply
-            self._set_up_workflows()
-
-            # TODO: handle reloading of masking configs
-            logger.info(f"Reloaded app configs (except masking configs) for {self.name} module")
+        # TODO: handle reloading of masking configs
+        logger.info(f"Reloaded app configs (except masking configs) for {self.name} module")
 
     def _set_up_workflows(self):
         from workflow.systems.python import PythonWorkflowAdaptor

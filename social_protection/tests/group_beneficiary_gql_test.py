@@ -14,6 +14,13 @@ from social_protection.tests.test_helpers import (
     create_project,
 )
 from social_protection.services import GroupBeneficiaryService
+from social_protection.models import (
+    GroupBeneficiaryProjectTimeEntry,
+    GroupBeneficiary,
+    GroupBeneficiaryProjectEnrollment,
+)
+from social_protection.apps import SocialProtectionConfig
+from core.models import Role, RoleRight, UserRole
 from location.test_helpers import create_test_village
 import json
 
@@ -25,17 +32,65 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         user = mock.Mock(is_anonymous=True)
 
     @classmethod
+    def _add_permissions_to_user(cls, user, permission_codes):
+        """Add specific permissions to a user"""
+        if hasattr(user, 'i_user') and user.i_user:
+            role = Role.objects.create(
+                name=f"TestRole_{user.username}",
+                is_system=0,
+                is_blocked=False,
+                audit_user_id=-1
+            )
+
+            for perm_code in permission_codes:
+                RoleRight.objects.create(
+                    role=role,
+                    right_id=int(perm_code),
+                    audit_user_id=-1
+                )
+
+            UserRole.objects.create(
+                user=user.i_user,
+                role=role,
+                audit_user_id=-1
+            )
+
+    @classmethod
     def setUpClass(cls):
         super(GroupBeneficiaryGQLTest, cls).setUpClass()
         cls.user = User.objects.filter(username='Admin', i_user__isnull=False).first()
         if not cls.user:
             cls.user = create_test_interactive_user(username='Admin')
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
+
+        cls.test_officer = create_test_interactive_user(
+            username="grpBeneUserNoRight", roles=[1])
+        cls.test_officer_token = BaseTestContext(user=cls.test_officer).get_jwt()
+
+        cls.enroll_user = create_test_interactive_user(
+            username="grpBeneEnrollUser", roles=[1])
+        cls._add_permissions_to_user(cls.enroll_user, SocialProtectionConfig.gql_project_beneficiary_enroll_perms)
+        cls.enroll_user_token = BaseTestContext(user=cls.enroll_user).get_jwt()
+
+        cls.time_entry_user = create_test_interactive_user(
+            username="grpBeneTimeEntryUser", roles=[1])
+        cls._add_permissions_to_user(cls.time_entry_user, SocialProtectionConfig.gql_project_beneficiary_time_entry_perms)
+        cls.time_entry_user_token = BaseTestContext(user=cls.time_entry_user).get_jwt()
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
             'code': 'GGQLTest',
             'type': 'GROUP'
         })
-        cls.individual_2child, cls.group_2child, gi = create_group_with_individual(cls.user.username)
+        cls.individual_2child, cls.group_2child, gi = create_group_with_individual(
+            cls.user.username,
+            individual_override={
+                'first_name': 'Alice',
+                'last_name': 'Zulu',
+                'dob': '2000-01-01',
+                'json_ext': {
+                    'number_of_children': 2
+                }
+            }
+        )
         child1 = create_individual(cls.user.username, payload_override={
             'first_name': 'Child1',
             'json_ext': {
@@ -48,13 +103,15 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                 'number_of_children': 0
             }
         })
-        add_individual_to_group(cls.user.username, child1, cls.group_2child)
-        add_individual_to_group(cls.user.username, child2, cls.group_2child)
+        add_individual_to_group(cls.user.username, child1, cls.group_2child, is_head=False)
+        add_individual_to_group(cls.user.username, child2, cls.group_2child, is_head=False)
 
         cls.individual_1child, cls.group_1child, __ = create_group_with_individual(
             cls.user.username,
             individual_override={
-                'first_name': 'OneChild',
+                'first_name': 'Bob',
+                'last_name': 'Yankee',
+                'dob': '1990-01-01',
                 'json_ext': {
                     'number_of_children': 1
                 }
@@ -63,7 +120,9 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         cls.individual, cls.group_0child, __ = create_group_with_individual(
             cls.user.username,
             individual_override={
-                'first_name': 'NoChild',
+                'first_name': 'Charlie',
+                'last_name': 'Xray',
+                'dob': '1980-01-01',
                 'json_ext': {
                     'number_of_children': 0
                 }
@@ -376,11 +435,14 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             self.user.username,
         )
 
+        gb_1child = self.group_1child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        gb_2child = self.group_2child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+
         query_str = f'''
             mutation {{
               enrollGroupProject(
                 input: {{
-                  ids: ["{self.group_1child.id}", "{self.group_2child.id}"]
+                  ids: ["{gb_1child.id}", "{gb_2child.id}"]
                   projectId: "{str(project.id)}"
                 }}
               ) {{
@@ -561,17 +623,21 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         )
 
         # Enroll group_2child into exclusive project
-        self.group_2child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=exclusive_project)
+        gb_2child = self.group_2child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        enrollment_2child = GroupBeneficiaryProjectEnrollment(group_beneficiary=gb_2child, project=exclusive_project)
+        enrollment_2child.save(user=self.user)
 
         # Enroll group_1child into multi-enrollment project
-        self.group_1child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=multi_project)
+        gb_1child = self.group_1child.groupbeneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        enrollment_1child = GroupBeneficiaryProjectEnrollment(group_beneficiary=gb_1child, project=multi_project)
+        enrollment_1child.save(user=self.user)
 
         # Query using multi-enrollment project: should exclude group_2child, include group_1child and group_0child
         query_str = f"""
             query {{
               groupBeneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{multi_project.id}",
+                eligibleForProject: "{multi_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -600,7 +666,7 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             query {{
               groupBeneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{exclusive_project.id}",
+                eligibleForProject: "{exclusive_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -623,3 +689,339 @@ class GroupBeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertIn(self.group_2child.code, returned_codes)
         self.assertIn(self.group_0child.code, returned_codes)
         self.assertNotIn(self.group_1child.code, returned_codes)
+
+    def test_query_group_beneficiary_project_time_entries(self):
+        project = create_project(
+            'GroupProgressTrackingProject',
+            self.benefit_plan,
+            self.user.username,
+            allows_multiple_enrollments=True,
+        )
+        # Enroll the ACTIVE group beneficiary in this project
+        group_beneficiary = self.group_0child.groupbeneficiary_set.filter(
+            benefit_plan=self.benefit_plan
+        ).first()
+        enrollment = GroupBeneficiaryProjectEnrollment(
+            group_beneficiary=group_beneficiary, project=project
+        )
+        enrollment.save(user=self.user)
+
+        # Create time entries
+        GroupBeneficiaryProjectTimeEntry(
+            enrollment=enrollment, day_number=1, percent_complete=30
+        ).save(username=self.user.username)
+        GroupBeneficiaryProjectTimeEntry(
+            enrollment=enrollment, day_number=2, percent_complete=60
+        ).save(username=self.user.username)
+        GroupBeneficiaryProjectTimeEntry(
+            enrollment=enrollment, day_number=3, percent_complete=90
+        ).save(username=self.user.username)
+
+        # Query with nested projectEnrollments and timeEntries
+        query_str = f"""
+        query {{
+          groupBeneficiary(
+            enrolledInProject: "{project.id}",
+            isDeleted: false,
+            first: 10
+          ) {{
+            totalCount
+            edges {{
+              node {{
+                group {{
+                  code
+                }}
+                projectEnrollments {{
+                  project {{
+                    id
+                    name
+                  }}
+                  timeEntries {{
+                    id
+                    dayNumber
+                    percentComplete
+                  }}
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+        beneficiary_data = response_data['data']['groupBeneficiary']
+
+        # Verify one group beneficiary
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+        node = beneficiary_data['edges'][0]['node']
+
+        # Verify group + project through enrollment
+        self.assertEqual(node['group']['code'], self.group_0child.code)
+        self.assertEqual(node['projectEnrollments'][0]['project']['name'], project.name)
+
+        # Verify time entries
+        time_entries = node['projectEnrollments'][0]['timeEntries']
+        self.assertEqual(len(time_entries), 3)
+
+        # Check order and values
+        sorted_entries = sorted(time_entries, key=lambda e: e['dayNumber'])
+        self.assertEqual([e['dayNumber'] for e in sorted_entries], [1, 2, 3])
+        self.assertEqual([e['percentComplete'] for e in sorted_entries], [30, 60, 90])
+
+    def test_project_group_beneficiary_enrollment(self):
+        project = create_project(
+            'test group enrollment permission project',
+            self.benefit_plan,
+            self.user.username,
+        )
+
+        # Get the group beneficiary ID (not group ID)
+        group_beneficiary = GroupBeneficiary.objects.filter(
+            group=self.group_0child,
+            benefit_plan=self.benefit_plan
+        ).first()
+        group_beneficiary_id = group_beneficiary.id
+
+        query_str = f'''
+            mutation {{
+              enrollGroupProject(
+                input: {{
+                  ids: ["{group_beneficiary_id}"]
+                  projectId: "{str(project.id)}"
+                }}
+              ) {{
+                clientMutationId
+                internalId
+              }}
+            }}
+        '''
+
+        # Test for unauthenticated user
+        response = self.query(query_str)
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollGroupProject']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        # Test for user without permission (test_officer)
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollGroupProject']
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
+
+        # Test for user with enrollment permission
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.enroll_user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollGroupProject']
+        self.assert_mutation_success(data['internalId'], self.enroll_user_token)
+
+        # Verify that expected project enrollment is persisted in the db
+        enrollment = GroupBeneficiaryProjectEnrollment.objects.filter(
+            group_beneficiary=group_beneficiary,
+            project=project,
+            is_deleted=False
+        ).first()
+        self.assertIsNotNone(enrollment)
+
+    def test_bulk_update_group_beneficiary_time_entries(self):
+        project = create_project(
+            'test group time entry permission project',
+            self.benefit_plan,
+            self.user.username,
+        )
+
+        # Enroll group beneficiary to project
+        group_beneficiary = GroupBeneficiary.objects.filter(
+            group=self.group_0child,
+            benefit_plan=self.benefit_plan
+        ).first()
+        enrollment = GroupBeneficiaryProjectEnrollment(
+            group_beneficiary=group_beneficiary,
+            project=project
+        )
+        enrollment.save(user=self.user)
+
+        query_str = f'''
+            mutation {{
+              bulkUpdateGroupBeneficiaryTimeEntries(
+                input: {{
+                  timeEntries: [{{
+                    enrollmentId: "{str(enrollment.id)}"
+                    dayNumber: 1
+                    percentComplete: 50
+                  }}]
+                }}
+              ) {{
+                clientMutationId
+                internalId
+              }}
+            }}
+        '''
+
+        # Test for unauthenticated user
+        response = self.query(query_str)
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateGroupBeneficiaryTimeEntries']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        # Test for user without permission (test_officer)
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateGroupBeneficiaryTimeEntries']
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
+
+        # Test for user with time entry permission
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.time_entry_user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateGroupBeneficiaryTimeEntries']
+        self.assert_mutation_success(data['internalId'], self.time_entry_user_token)
+
+        # Verify that expected time entry is persisted in the db
+        time_entry = GroupBeneficiaryProjectTimeEntry.objects.filter(
+            enrollment=enrollment,
+            day_number=1
+        ).first()
+        self.assertIsNotNone(time_entry)
+        self.assertEqual(time_entry.percent_complete, 50)
+
+    def test_query_group_beneficiary_order_by_head_first_name(self):
+        """Test ordering group beneficiaries by head's first name.
+
+        Uses existing groups from setUpClass:
+        - group_2child: head first_name='Alice'
+        - group_1child: head first_name='Bob'
+        - group_0child: head first_name='Charlie'
+        """
+        query_str = f"""
+            query {{
+              groupBeneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                orderBy: ["head_first_name"],
+                isDeleted: false,
+                first: 10
+              ) {{
+                edges {{
+                  node {{
+                    group {{
+                      code
+                      head {{
+                        firstName
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        first_names = [e['node']['group']['head']['firstName'] for e in data['edges']]
+        self.assertEqual(first_names, ['Alice', 'Bob', 'Charlie'])
+
+        # Descending order
+        query_str = query_str.replace('orderBy: ["head_first_name"]', 'orderBy: ["-head_first_name"]')
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        first_names = [e['node']['group']['head']['firstName'] for e in data['edges']]
+        self.assertEqual(first_names, ['Charlie', 'Bob', 'Alice'])
+
+    def test_query_group_beneficiary_order_by_head_last_name(self):
+        """Test ordering group beneficiaries by head's last name.
+
+        Uses existing groups from setUpClass:
+        - group_0child: head last_name='Xray'
+        - group_1child: head last_name='Yankee'
+        - group_2child: head last_name='Zulu'
+        """
+        query_str = f"""
+            query {{
+              groupBeneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                orderBy: ["head_last_name"],
+                isDeleted: false,
+                first: 10
+              ) {{
+                edges {{
+                  node {{
+                    group {{
+                      code
+                      head {{
+                        lastName
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        last_names = [e['node']['group']['head']['lastName'] for e in data['edges']]
+        self.assertEqual(last_names, ['Xray', 'Yankee', 'Zulu'])
+
+    def test_query_group_beneficiary_order_by_head_dob(self):
+        """Test ordering group beneficiaries by head's date of birth.
+
+        Uses existing groups from setUpClass:
+        - group_0child: head dob='1980-01-01'
+        - group_1child: head dob='1990-01-01'
+        - group_2child: head dob='2000-01-01'
+        """
+        query_str = f"""
+            query {{
+              groupBeneficiary(
+                benefitPlan_Id: "{self.benefit_plan.uuid}",
+                orderBy: ["head_dob"],
+                isDeleted: false,
+                first: 10
+              ) {{
+                edges {{
+                  node {{
+                    group {{
+                      code
+                      head {{
+                        dob
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+        """
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        dobs = [e['node']['group']['head']['dob'] for e in data['edges']]
+        self.assertEqual(dobs, ['1980-01-01', '1990-01-01', '2000-01-01'])
+
+        # Descending order (youngest first)
+        query_str = query_str.replace('orderBy: ["head_dob"]', 'orderBy: ["-head_dob"]')
+        response = self.query(query_str, headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"})
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['groupBeneficiary']
+
+        dobs = [e['node']['group']['head']['dob'] for e in data['edges']]
+        self.assertEqual(dobs, ['2000-01-01', '1990-01-01', '1980-01-01'])

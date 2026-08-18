@@ -4,17 +4,21 @@ from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import transaction
 from django.utils.translation import gettext as _
 
-from core.gql.gql_mutations.base_mutation import BaseHistoryModelCreateMutationMixin, BaseMutation, \
+from core.gql.gql_mutations.base_mutation import (
+    BaseHistoryModelCreateMutationMixin, BaseMutation,
     BaseHistoryModelUpdateMutationMixin, BaseHistoryModelDeleteMutationMixin
+)
 from core.schema import OpenIMISMutation
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan, Project, ProjectMutation, Activity,
-    Beneficiary, GroupBeneficiary, BeneficiaryStatus, BenefitPlanMutation
+    Beneficiary, GroupBeneficiary, BeneficiaryStatus, BenefitPlanMutation,
+    BeneficiaryProjectTimeEntry, GroupBeneficiaryProjectTimeEntry
 )
 from social_protection.services import (
     BenefitPlanService, ProjectService,
-    BeneficiaryService, GroupBeneficiaryService
+    BeneficiaryService, GroupBeneficiaryService,
+    ProjectEnrollmentService
 )
 from location.models import Location
 
@@ -32,7 +36,9 @@ class CreateBenefitPlanInputType(OpenIMISMutation.Input):
     code = graphene.String(required=True)
     name = graphene.String(required=True, max_length=255)
     max_beneficiaries = graphene.Int(default_value=None)
-    ceiling_per_beneficiary = graphene.Decimal(max_digits=18, decimal_places=2, required=False)
+    ceiling_per_beneficiary = graphene.Decimal(
+        max_digits=18, decimal_places=2, required=False
+    )
     institution = graphene.String(required=False, max_length=255)
     beneficiary_data_schema = graphene.types.json.JSONString(required=False)
     type = graphene.Field(BenefitPlanTypeEnum, required=True)
@@ -88,7 +94,9 @@ class UpdateGroupBeneficiaryInputType(UpdateGenericBeneficiaryInputType):
     pass
 
 
-class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+class CreateBenefitPlanMutation(
+    BaseHistoryModelCreateMutationMixin, BaseMutation
+):
     _mutation_class = "CreateBenefitPlanMutation"
     _mutation_module = "social_protection"
     _model = BenefitPlan
@@ -99,10 +107,12 @@ class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
                 SocialProtectionConfig.gql_benefit_plan_create_perms):
             raise ValidationError("mutation.authentication_required")
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_create_perms, data, 'beneficiary_data_schema'
+            user, SocialProtectionConfig.gql_schema_create_perms,
+            data, 'beneficiary_data_schema'
         )
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_create_perms, data, 'json_ext'
+            user, SocialProtectionConfig.gql_schema_create_perms,
+            data, 'json_ext'
         )
 
     @classmethod
@@ -117,7 +127,8 @@ class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
             payroll_id = res['data']['id']
             benefit_plan = BenefitPlan.objects.get(id=payroll_id)
             BenefitPlanMutation.object_mutated(
-                user, client_mutation_id=client_mutation_id, benefit_plan=benefit_plan
+                user, client_mutation_id=client_mutation_id,
+                benefit_plan=benefit_plan
             )
         if not res['success']:
             return res
@@ -127,7 +138,9 @@ class CreateBenefitPlanMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
         pass
 
 
-class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+class UpdateBenefitPlanMutation(
+    BaseHistoryModelUpdateMutationMixin, BaseMutation
+):
     _mutation_class = "UpdateBenefitPlanMutation"
     _mutation_module = "social_protection"
     _model = BenefitPlan
@@ -139,10 +152,12 @@ class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
                 SocialProtectionConfig.gql_benefit_plan_update_perms):
             raise ValidationError("mutation.authentication_required")
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_update_perms, data, 'beneficiary_data_schema'
+            user, SocialProtectionConfig.gql_schema_update_perms,
+            data, 'beneficiary_data_schema'
         )
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_update_perms, data, 'json_ext'
+            user, SocialProtectionConfig.gql_schema_update_perms,
+            data, 'json_ext'
         )
 
     @classmethod
@@ -168,7 +183,9 @@ class UpdateBenefitPlanMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
         pass
 
 
-class DeleteBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class DeleteBenefitPlanMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "DeleteBenefitPlanMutation"
     _mutation_module = "social_protection"
     _model = BenefitPlan
@@ -189,7 +206,9 @@ class DeleteBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         service = BenefitPlanService(user)
         ids = data.get('ids')
         if not ids:
-            return {'success': False, 'message': 'No IDs to delete', 'details': ''}
+            return {
+                'success': False, 'message': 'No IDs to delete', 'details': ''
+            }
 
         with transaction.atomic():
             for obj_id in ids:
@@ -202,7 +221,48 @@ class DeleteBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         ids = graphene.List(graphene.UUID)
 
 
-class CreateBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+class UndoDeleteBenefitPlanMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
+    _mutation_class = "UndoDeleteBenefitPlanMutation"
+    _mutation_module = "social_protection"
+    _model = BenefitPlan
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if type(user) is AnonymousUser or not user.id or not user.has_perms(
+                SocialProtectionConfig.gql_benefit_plan_delete_perms):
+            raise ValidationError("mutation.authentication_required")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = BenefitPlanService(user)
+        ids = data.get('ids')
+        if not ids:
+            return {
+                'success': False,
+                'message': 'No IDs to undo delete',
+                'details': ''
+            }
+
+        with transaction.atomic():
+            for obj_id in ids:
+                res = service.undo_delete({'id': obj_id})
+                if not res['success']:
+                    return res
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)
+
+
+class CreateBeneficiaryMutation(
+    BaseHistoryModelCreateMutationMixin, BaseMutation
+):
     _mutation_class = "CreateBeneficiaryMutation"
     _mutation_module = "social_protection"
     _model = Beneficiary
@@ -213,7 +273,8 @@ class CreateBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
                 SocialProtectionConfig.gql_beneficiary_create_perms):
             raise ValidationError("mutation.authentication_required")
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_create_perms, data, 'json_ext'
+            user, SocialProtectionConfig.gql_schema_create_perms,
+            data, 'json_ext'
         )
 
     @classmethod
@@ -235,7 +296,9 @@ class CreateBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMutatio
         pass
 
 
-class UpdateBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+class UpdateBeneficiaryMutation(
+    BaseHistoryModelUpdateMutationMixin, BaseMutation
+):
     _mutation_class = "UpdateBeneficiaryMutation"
     _mutation_module = "social_protection"
     _model = Beneficiary
@@ -247,7 +310,8 @@ class UpdateBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
                 SocialProtectionConfig.gql_beneficiary_update_perms):
             raise ValidationError("mutation.authentication_required")
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_update_perms, data, 'json_ext'
+            user, SocialProtectionConfig.gql_schema_update_perms,
+            data, 'json_ext'
         )
 
     @classmethod
@@ -271,7 +335,9 @@ class UpdateBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMutatio
         pass
 
 
-class DeleteBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class DeleteBeneficiaryMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "DeleteBeneficiaryMutation"
     _mutation_module = "social_protection"
     _model = Beneficiary
@@ -293,7 +359,9 @@ class DeleteBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
 
         ids = data.get('ids')
         if not ids:
-            return {'success': False, 'message': 'No IDs to delete', 'details': ''}
+            return {
+                'success': False, 'message': 'No IDs to delete', 'details': ''
+            }
 
         with transaction.atomic():
             for obj_id in ids:
@@ -309,7 +377,9 @@ class DeleteBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         ids = graphene.List(graphene.UUID)
 
 
-class CloseBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class CloseBenefitPlanMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "CloseBenefitPlanMutation"
     _mutation_module = "social_protection"
     _model = BenefitPlan
@@ -338,7 +408,9 @@ class CloseBenefitPlanMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation
         ids = graphene.List(graphene.UUID)
 
 
-class CreateGroupBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+class CreateGroupBeneficiaryMutation(
+    BaseHistoryModelCreateMutationMixin, BaseMutation
+):
     _mutation_class = "CreateGroupBeneficiaryMutation"
     _mutation_module = "social_protection"
     _model = GroupBeneficiary
@@ -349,7 +421,8 @@ class CreateGroupBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMu
                 SocialProtectionConfig.gql_beneficiary_create_perms):
             raise ValidationError("mutation.authentication_required")
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_create_perms, data, 'json_ext'
+            user, SocialProtectionConfig.gql_schema_create_perms,
+            data, 'json_ext'
         )
 
     @classmethod
@@ -371,7 +444,9 @@ class CreateGroupBeneficiaryMutation(BaseHistoryModelCreateMutationMixin, BaseMu
         pass
 
 
-class UpdateGroupBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+class UpdateGroupBeneficiaryMutation(
+    BaseHistoryModelUpdateMutationMixin, BaseMutation
+):
     _mutation_class = "UpdateGroupBeneficiaryMutation"
     _mutation_module = "social_protection"
     _model = GroupBeneficiary
@@ -383,7 +458,8 @@ class UpdateGroupBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMu
                 SocialProtectionConfig.gql_beneficiary_update_perms):
             raise ValidationError("mutation.authentication_required")
         check_perms_for_field(
-            user, SocialProtectionConfig.gql_schema_update_perms, data, 'json_ext'
+            user, SocialProtectionConfig.gql_schema_update_perms,
+            data, 'json_ext'
         )
 
     @classmethod
@@ -407,7 +483,9 @@ class UpdateGroupBeneficiaryMutation(BaseHistoryModelUpdateMutationMixin, BaseMu
         pass
 
 
-class DeleteGroupBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class DeleteGroupBeneficiaryMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "DeleteGroupBeneficiaryMutation"
     _mutation_module = "social_protection"
     _model = GroupBeneficiary
@@ -429,7 +507,9 @@ class DeleteGroupBeneficiaryMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
 
         ids = data.get('ids')
         if not ids:
-            return {'success': False, 'message': 'No IDs to delete', 'details': ''}
+            return {
+                'success': False, 'message': 'No IDs to delete', 'details': ''
+            }
 
         with transaction.atomic():
             for obj_id in ids:
@@ -456,7 +536,9 @@ class CreateProjectInputType(OpenIMISMutation.Input):
     allows_multiple_enrollments = graphene.Boolean(required=False)
 
 
-class CreateProjectMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+class CreateProjectMutation(
+    BaseHistoryModelCreateMutationMixin, BaseMutation
+):
     _mutation_class = "CreateProjectMutation"
     _mutation_module = "social_protection"
     _model = Project
@@ -475,10 +557,14 @@ class CreateProjectMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
         if "client_mutation_label" in data:
             data.pop("client_mutation_label")
 
-        data["benefit_plan"] = BenefitPlan.objects.get(id=data.pop("benefit_plan_id"))
+        data["benefit_plan"] = BenefitPlan.objects.get(
+            id=data.pop("benefit_plan_id")
+        )
         data["activity"] = Activity.objects.get(id=data.pop("activity_id"))
         data["location"] = Location.objects.get(uuid=data.pop("location_id"))
-        data.setdefault("status", Project._meta.get_field("status").get_default())
+        data.setdefault(
+            "status", Project._meta.get_field("status").get_default()
+        )
 
         service = ProjectService(user)
         res = service.create(data)
@@ -507,7 +593,9 @@ class UpdateProjectInputType(OpenIMISMutation.Input):
     allows_multiple_enrollments = graphene.Boolean(required=False)
 
 
-class UpdateProjectMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+class UpdateProjectMutation(
+    BaseHistoryModelUpdateMutationMixin, BaseMutation
+):
     _mutation_class = "UpdateProjectMutation"
     _mutation_module = "social_protection"
     _model = Project
@@ -527,11 +615,15 @@ class UpdateProjectMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
             data.pop("client_mutation_label")
 
         if 'benefit_plan_id' in data:
-            data["benefit_plan"] = BenefitPlan.objects.get(id=data.pop("benefit_plan_id"))
+            data["benefit_plan"] = BenefitPlan.objects.get(
+                id=data.pop("benefit_plan_id")
+            )
         if 'activity_id' in data:
             data["activity"] = Activity.objects.get(id=data.pop("activity_id"))
         if 'location_id' in data:
-            data["location"] = Location.objects.get(uuid=data.pop("location_id"))
+            data["location"] = Location.objects.get(
+                uuid=data.pop("location_id")
+            )
 
         service = ProjectService(user)
         res = service.update(data)
@@ -542,7 +634,9 @@ class UpdateProjectMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
         pass
 
 
-class DeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class DeleteProjectMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "DeleteProjectMutation"
     _mutation_module = "social_protection"
     _model = Project
@@ -564,7 +658,9 @@ class DeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
         service = ProjectService(user)
         ids = data.get("ids")
         if not ids:
-            return {"success": False, "message": "No IDs to delete", "details": ""}
+            return {
+                "success": False, "message": "No IDs to delete", "details": ""
+            }
 
         with transaction.atomic():
             for obj_id in ids:
@@ -576,7 +672,9 @@ class DeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
         ids = graphene.List(graphene.UUID)
 
 
-class UndoDeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class UndoDeleteProjectMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "UndoDeleteProjectMutation"
     _mutation_module = "social_protection"
     _model = Project
@@ -598,7 +696,11 @@ class UndoDeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         service = ProjectService(user)
         ids = data.get("ids")
         if not ids:
-            return {"success": False, "message": "No IDs to undo delete", "details": ""}
+            return {
+                "success": False,
+                "message": "No IDs to undo delete",
+                "details": ""
+            }
 
         with transaction.atomic():
             for obj_id in ids:
@@ -610,7 +712,9 @@ class UndoDeleteProjectMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         ids = graphene.List(graphene.UUID)
 
 
-class ProjectEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class ProjectEnrollmentMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "ProjectEnrollmentMutation"
     _mutation_module = "social_protection"
     _model = Beneficiary
@@ -619,7 +723,7 @@ class ProjectEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
     def _validate_mutation(cls, user, **data):
         super()._validate_mutation(user, **data)
         if not user.has_perms(
-                SocialProtectionConfig.gql_project_update_perms):
+                SocialProtectionConfig.gql_project_beneficiary_enroll_perms):
             raise PermissionDenied(_("unauthorized"))
 
     @classmethod
@@ -629,14 +733,18 @@ class ProjectEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutatio
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        return BeneficiaryService(user).enroll_project(data)
+        return ProjectEnrollmentService(
+            user, ProjectEnrollmentService.INDIVIDUAL
+        ).enroll_project(data)
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
         project_id = graphene.UUID(required=True)
 
 
-class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+class ProjectGroupEnrollmentMutation(
+    BaseHistoryModelDeleteMutationMixin, BaseMutation
+):
     _mutation_class = "ProjectGroupEnrollmentMutation"
     _mutation_module = "social_protection"
     _model = GroupBeneficiary
@@ -645,7 +753,7 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
     def _validate_mutation(cls, user, **data):
         super()._validate_mutation(user, **data)
         if not user.has_perms(
-                SocialProtectionConfig.gql_project_update_perms):
+                SocialProtectionConfig.gql_project_beneficiary_enroll_perms):
             raise PermissionDenied(_("unauthorized"))
 
     @classmethod
@@ -655,8 +763,75 @@ class ProjectGroupEnrollmentMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
 
-        return GroupBeneficiaryService(user).enroll_project(data)
+        return ProjectEnrollmentService(
+            user, ProjectEnrollmentService.GROUP
+        ).enroll_project(data)
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)
         project_id = graphene.UUID(required=True)
+
+
+class TimeEntryInputType(graphene.InputObjectType):
+    id = graphene.UUID(required=False)
+    enrollment_id = graphene.UUID(required=True)
+    day_number = graphene.Int(required=True)
+    percent_complete = graphene.Int(required=True)
+
+
+class BulkUpdateBeneficiaryTimeEntriesMutation(BaseMutation):
+    _mutation_class = "BulkUpdateBeneficiaryTimeEntriesMutation"
+    _mutation_module = "social_protection"
+    _model = BeneficiaryProjectTimeEntry
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if isinstance(user, AnonymousUser):
+            raise ValidationError("mutation.authentication_required")
+        perms = SocialProtectionConfig.gql_project_beneficiary_time_entry_perms
+        if not user.has_perms(perms):
+            raise ValidationError("mutation.unauthorized")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = ProjectEnrollmentService(
+            user, ProjectEnrollmentService.INDIVIDUAL
+        )
+        service.bulk_update_time_entries(data)
+
+    class Input(OpenIMISMutation.Input):
+        time_entries = graphene.List(TimeEntryInputType, required=True)
+
+
+class BulkUpdateGroupBeneficiaryTimeEntriesMutation(BaseMutation):
+    _mutation_class = "BulkUpdateGroupBeneficiaryTimeEntriesMutation"
+    _mutation_module = "social_protection"
+    _model = GroupBeneficiaryProjectTimeEntry
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if isinstance(user, AnonymousUser):
+            raise ValidationError("mutation.authentication_required")
+        perms = SocialProtectionConfig.gql_project_beneficiary_time_entry_perms
+        if not user.has_perms(perms):
+            raise ValidationError("mutation.unauthorized")
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        if "client_mutation_id" in data:
+            data.pop('client_mutation_id')
+        if "client_mutation_label" in data:
+            data.pop('client_mutation_label')
+
+        service = ProjectEnrollmentService(
+            user, ProjectEnrollmentService.GROUP
+        )
+        service.bulk_update_time_entries(data)
+
+    class Input(OpenIMISMutation.Input):
+        time_entries = graphene.List(TimeEntryInputType, required=True)

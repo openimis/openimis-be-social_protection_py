@@ -3,14 +3,20 @@ import logging
 import uuid
 
 import pandas as pd
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.db import transaction
+from django.utils.translation import gettext as _
 from pandas import DataFrame
 
 from calculation.services import get_calculation_object
 from core.services import BaseService
 from core.signals import register_service_signal
-from individual.models import IndividualDataSourceUpload, IndividualDataSource, Individual
+from individual.models import (
+    IndividualDataSourceUpload,
+    IndividualDataSource,
+    Individual,
+)
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     BenefitPlan,
@@ -18,17 +24,28 @@ from social_protection.models import (
     BenefitPlanDataUploadRecords,
     GroupBeneficiary,
     Project,
+    BeneficiaryProjectTimeEntry,
+    GroupBeneficiaryProjectTimeEntry,
+    BeneficiaryProjectEnrollment,
+    GroupBeneficiaryProjectEnrollment,
 )
 
-from social_protection.utils import load_dataframe, fetch_summary_of_valid_items, fetch_summary_of_broken_items
+from social_protection.utils import (
+    load_dataframe,
+    fetch_summary_of_valid_items,
+    fetch_summary_of_broken_items,
+)
 from social_protection.validation import (
     BeneficiaryValidation,
     BenefitPlanValidation,
     GroupBeneficiaryValidation,
     ProjectValidation,
 )
-from tasks_management.services import UpdateCheckerLogicServiceMixin, CheckerLogicServiceMixin, \
-    crud_business_data_builder
+from tasks_management.services import (
+    UpdateCheckerLogicServiceMixin,
+    CheckerLogicServiceMixin,
+    crud_business_data_builder,
+)
 from workflow.systems.base import WorkflowHandler
 from core.models import User
 from core.services.utils import output_exception
@@ -55,20 +72,41 @@ class BenefitPlanService(BaseService, UpdateCheckerLogicServiceMixin):
         obj_data = {k: v for k, v in obj_data.items() if k != 'user'}
         return super().delete(obj_data)
 
+    @register_service_signal('benefit_plan_service.undo_delete')
+    def undo_delete(self, obj_data):
+        self.validation_class.validate_undo_delete(obj_data)
+        obj_ = self.OBJECT_TYPE.objects.filter(
+            id=obj_data['id']
+        ).first()
+        obj_.is_deleted = False
+        obj_.save(user=self.user)
+        return {
+            "success": True,
+            "message": "Ok",
+            "detail": "",
+        }
+
     @register_service_signal('benefit_plan_service.close')
     def close_benefit_plan(self, obj_data):
         from tasks_management.models import Task
         from tasks_management.apps import TasksManagementConfig
-        from tasks_management.services import _get_std_task_data_payload, TaskService
-        from social_protection.apps import SocialProtectionConfig
-        benefit_plan = BenefitPlan.objects.filter(id=obj_data.get('id')).first()
+        from tasks_management.services import (
+            _get_std_task_data_payload,
+            TaskService,
+        )
+        from social_protection.apps import SocialProtectionConfig as SPConfig
+        benefit_plan = BenefitPlan.objects.filter(
+            id=obj_data.get('id')
+        ).first()
         data = {'benefit_plan_id': benefit_plan.id}
         TaskService(self.user).create({
             'source': 'BenefitPlanService',
             'entity': benefit_plan,
             'status': Task.Status.RECEIVED,
-            'executor_action_event': TasksManagementConfig.default_executor_event,
-            'business_event': SocialProtectionConfig.benefit_plan_suspend,
+            'executor_action_event': (
+                TasksManagementConfig.default_executor_event
+            ),
+            'business_event': SPConfig.benefit_plan_suspend,
             'data': _get_std_task_data_payload(data)
         })
 
@@ -79,13 +117,24 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
     def __init__(self, user, validation_class=BeneficiaryValidation):
         super().__init__(user, validation_class)
 
-    def would_exceed_max_active_beneficiaries(self, benefit_plan_id, status, id=None):
+    def would_exceed_max_active_beneficiaries(
+        self, benefit_plan_id, status, id=None
+    ):
         benefit_plan = BenefitPlan.objects.get(id=benefit_plan_id)
         if benefit_plan and status == "ACTIVE":
             max_active_beneficiaries = benefit_plan.max_beneficiaries
-            active_beneficiaries = Beneficiary.objects.filter(is_deleted=False, benefit_plan_id=benefit_plan_id, status="ACTIVE").distinct()
-            beneficiary_already_active = active_beneficiaries.filter(id=id).exists() if id else False
-            return active_beneficiaries.count() == max_active_beneficiaries and not beneficiary_already_active
+            active_beneficiaries = Beneficiary.objects.filter(
+                is_deleted=False,
+                benefit_plan_id=benefit_plan_id,
+                status="ACTIVE"
+            ).distinct()
+            beneficiary_already_active = (
+                active_beneficiaries.filter(id=id).exists() if id else False
+            )
+            return (
+                active_beneficiaries.count() == max_active_beneficiaries
+                and not beneficiary_already_active
+            )
         return False
 
     @register_service_signal('beneficiary_service.create')
@@ -94,11 +143,20 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
             status = obj_data.get("status", None)
             benefit_plan_id = obj_data.get("benefit_plan_id", None)
 
-            if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status):
-                raise ValueError("Error creating beneficiary with active status. Benefit plan is already at max active beneficiaries")
+            if self.would_exceed_max_active_beneficiaries(
+                benefit_plan_id, status
+            ):
+                raise ValueError(
+                    "Error creating beneficiary with active status. "
+                    "Benefit plan is already at max active beneficiaries"
+                )
             return super().create(obj_data)
         except Exception as exc:
-            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+            return output_exception(
+                model_name=self.OBJECT_TYPE.__name__,
+                method="update",
+                exception=exc
+            )
 
     @register_service_signal('beneficiary_service.update')
     def update(self, obj_data):
@@ -107,30 +165,24 @@ class BeneficiaryService(BaseService, CheckerLogicServiceMixin):
             benefit_plan_id = obj_data.get("benefit_plan_id", None)
             id = obj_data.get('id', None)
 
-            if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status, id):
-                raise ValueError("Error changing beneficiary to active status. Benefit plan is already at max active beneficiaries")
+            if self.would_exceed_max_active_beneficiaries(
+                benefit_plan_id, status, id
+            ):
+                raise ValueError(
+                    "Error changing beneficiary to active status. "
+                    "Benefit plan is already at max active beneficiaries"
+                )
             return super().update(obj_data)
         except Exception as exc:
-            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+            return output_exception(
+                model_name=self.OBJECT_TYPE.__name__,
+                method="update",
+                exception=exc
+            )
 
     @register_service_signal('beneficiary_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
-
-    @register_service_signal('beneficiary_service.enroll_project')
-    def enroll_project(self, obj_data):
-        project_id = obj_data['project_id']
-        enroll_ids = obj_data.get('ids', [])
-        unenroll_ids = Beneficiary.objects.filter(project_id=project_id)\
-            .exclude(id__in=enroll_ids).values_list('id', flat=True)
-        with transaction.atomic():
-            try:
-                for id in unenroll_ids:
-                    super().update({'id': id, 'project_id': None})
-                for id in enroll_ids:
-                    super().update({'id': id, 'project_id': project_id})
-            except Exception as exc:
-                return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
 
     def _business_data_serializer(self, data):
         def serialize(key, value):
@@ -157,13 +209,24 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
     def __init__(self, user, validation_class=GroupBeneficiaryValidation):
         super().__init__(user, validation_class)
 
-    def would_exceed_max_active_beneficiaries(self, benefit_plan_id, status, id=None):
+    def would_exceed_max_active_beneficiaries(
+        self, benefit_plan_id, status, id=None
+    ):
         benefit_plan = BenefitPlan.objects.get(id=benefit_plan_id)
         if benefit_plan and status == "ACTIVE":
             max_active_beneficiaries = benefit_plan.max_beneficiaries
-            active_beneficiaries = GroupBeneficiary.objects.filter(is_deleted=False, benefit_plan_id=benefit_plan_id, status="ACTIVE").distinct()
-            beneficiary_already_active = active_beneficiaries.filter(id=id).exists() if id else False
-            return active_beneficiaries.count() == max_active_beneficiaries and not beneficiary_already_active
+            active_beneficiaries = GroupBeneficiary.objects.filter(
+                is_deleted=False,
+                benefit_plan_id=benefit_plan_id,
+                status="ACTIVE"
+            ).distinct()
+            beneficiary_already_active = (
+                active_beneficiaries.filter(id=id).exists() if id else False
+            )
+            return (
+                active_beneficiaries.count() == max_active_beneficiaries
+                and not beneficiary_already_active
+            )
         return False
 
     @register_service_signal('group_beneficiary_service.create')
@@ -172,11 +235,20 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
             status = obj_data.get("status", None)
             benefit_plan_id = obj_data.get("benefit_plan_id", None)
 
-            if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status):
-                raise ValueError("Error creating beneficiary with active status. Benefit plan is already at max active beneficiaries")
+            if self.would_exceed_max_active_beneficiaries(
+                benefit_plan_id, status
+            ):
+                raise ValueError(
+                    "Error creating beneficiary with active status. "
+                    "Benefit plan is already at max active beneficiaries"
+                )
             return super().create(obj_data)
         except Exception as exc:
-            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+            return output_exception(
+                model_name=self.OBJECT_TYPE.__name__,
+                method="update",
+                exception=exc
+            )
 
     @register_service_signal('group_beneficiary_service.update')
     def update(self, obj_data):
@@ -185,42 +257,172 @@ class GroupBeneficiaryService(BaseService, CheckerLogicServiceMixin):
             benefit_plan_id = obj_data.get("benefit_plan_id", None)
             id = obj_data.get('id', None)
 
-            if self.would_exceed_max_active_beneficiaries(benefit_plan_id, status, id):
-                raise ValueError("Error changing beneficiary to active status. Benefit plan is already at max active beneficiaries")
+            if self.would_exceed_max_active_beneficiaries(
+                benefit_plan_id, status, id
+            ):
+                raise ValueError(
+                    "Error changing beneficiary to active status. "
+                    "Benefit plan is already at max active beneficiaries"
+                )
             return super().update(obj_data)
         except Exception as exc:
-            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+            return output_exception(
+                model_name=self.OBJECT_TYPE.__name__,
+                method="update",
+                exception=exc
+            )
 
     @register_service_signal('group_beneficiary_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
 
-    @register_service_signal('group_beneficiary_service.enroll_project')
+
+class ProjectEnrollmentService:
+    INDIVIDUAL = 'INDIVIDUAL'
+    GROUP = 'GROUP'
+
+    CONFIGS = {
+        INDIVIDUAL: {
+            'enrollment_model': BeneficiaryProjectEnrollment,
+            'time_entry_model': BeneficiaryProjectTimeEntry,
+            'fk_field': 'beneficiary_id',
+            'error_label': 'Beneficiaries',
+        },
+        GROUP: {
+            'enrollment_model': GroupBeneficiaryProjectEnrollment,
+            'time_entry_model': GroupBeneficiaryProjectTimeEntry,
+            'fk_field': 'group_beneficiary_id',
+            'error_label': 'Group beneficiaries',
+        },
+    }
+
+    def __init__(self, user, enrollment_type):
+        self.user = user
+        self.enrollment_type = enrollment_type
+        self.config = self.CONFIGS[enrollment_type]
+
+    @register_service_signal('project_enrollment_service.enroll_project')
     def enroll_project(self, obj_data):
         project_id = obj_data['project_id']
-        enroll_ids = obj_data.get('ids', [])
-        unenroll_ids = GroupBeneficiary.objects.filter(project_id=project_id)\
-            .exclude(id__in=enroll_ids).values_list('id', flat=True)
-        with transaction.atomic():
-            try:
-                for id in unenroll_ids:
-                    super().update({'id': id, 'project_id': None})
-                for id in enroll_ids:
-                    super().update({'id': id, 'project_id': project_id})
-            except Exception as exc:
-                return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+        beneficiary_ids = {
+            uuid.UUID(str(bid)) for bid in obj_data.get('ids', [])
+        }
+
+        project = Project.objects.get(id=project_id)
+        enrollment_model = self.config['enrollment_model']
+        fk_field = self.config['fk_field']
+
+        # including deleted
+        all_enrollments = {
+            getattr(e, fk_field): e
+            for e in enrollment_model.objects.filter(project_id=project_id)
+        }
+
+        currently_enrolled = {
+            bid for bid, e in all_enrollments.items() if not e.is_deleted
+        }
+
+        to_enroll = beneficiary_ids - currently_enrolled
+        to_unenroll = currently_enrolled - beneficiary_ids
+
+        if not project.allows_multiple_enrollments and to_enroll:
+            already_enrolled_elsewhere = set(
+                enrollment_model.objects.filter(
+                    **{f'{fk_field}__in': to_enroll},
+                    is_deleted=False
+                ).exclude(
+                    project_id=project_id
+                ).values_list(fk_field, flat=True)
+            )
+            if already_enrolled_elsewhere:
+                msg = _(
+                    "%(label)s %(ids)s are already enrolled in another "
+                    "project. This project does not allow multiple "
+                    "enrollments."
+                ) % {
+                    'label': self.config['error_label'],
+                    'ids': already_enrolled_elsewhere
+                }
+                raise ValueError(msg)
+
+        data_list = []
+
+        for beneficiary_id in to_unenroll:
+            enrollment = all_enrollments[beneficiary_id]
+            data_list.append({'id': enrollment.id, 'is_deleted': True})
+
+        for beneficiary_id in to_enroll:
+            if beneficiary_id in all_enrollments:
+                enrollment = all_enrollments[beneficiary_id]
+                data_list.append({'id': enrollment.id, 'is_deleted': False})
+            else:
+                data_list.append(
+                    {fk_field: beneficiary_id, 'project_id': project_id}
+                )
+
+        enrollment_model.bulk_save(
+            data_list, self.user, include_deleted=True
+        )
+
+    @register_service_signal(
+        'project_enrollment_service.bulk_update_time_entries'
+    )
+    def bulk_update_time_entries(self, obj_data):
+        time_entries_data = obj_data.get('time_entries', [])
+
+        if not time_entries_data:
+            return
+
+        enrollment_model = self.config['enrollment_model']
+        time_entry_model = self.config['time_entry_model']
+
+        enrollment_ids = {str(e['enrollment_id']) for e in time_entries_data}
+        enrollments = enrollment_model.objects.filter(
+            id__in=enrollment_ids,
+            is_deleted=False
+        ).select_related('project')
+
+        enrollment_map = {str(e.id): e for e in enrollments}
+        valid_enrollment_ids = set(enrollment_map.keys())
+
+        if invalid_ids := enrollment_ids - valid_enrollment_ids:
+            raise ValueError(
+                _('Invalid enrollment IDs: %(ids)s') % {'ids': invalid_ids}
+            )
+
+        for entry in time_entries_data:
+            enrollment = enrollment_map[str(entry['enrollment_id'])]
+            project = enrollment.project
+
+            day = entry['day_number']
+            if not 1 <= day <= project.working_days:
+                raise ValidationError(
+                    _('Day number must be between 1 and %(working_days)s.')
+                    % {'working_days': project.working_days}
+                )
+
+            percent = entry['percent_complete']
+            if not 0 <= percent <= 100:
+                raise ValidationError(
+                    _('Percent complete must be between 0 and 100.')
+                )
+
+        time_entry_model.bulk_save(
+            data_list=time_entries_data,
+            user=self.user
+        )
 
 
 class BeneficiaryImportService:
     import_loaders = {
-        # .csv
         'text/csv': lambda f: pd.read_csv(f),
-        # .xlsx
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': lambda f: pd.read_excel(f),
-        # .xls
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': (
+            lambda f: pd.read_excel(f)
+        ),
         'application/vnd.ms-excel': lambda f: pd.read_excel(f),
-        # .ods
-        'application/vnd.oasis.opendocument.spreadsheet': lambda f: pd.read_excel(f),
+        'application/vnd.oasis.opendocument.spreadsheet': (
+            lambda f: pd.read_excel(f)
+        ),
     }
 
     def __init__(self, user):
@@ -228,19 +430,24 @@ class BeneficiaryImportService:
         self.user = user
 
     @register_service_signal('benefit_plan.import_beneficiaries')
-    def import_beneficiaries(self,
-                             import_file: InMemoryUploadedFile,
-                             benefit_plan: BenefitPlan,
-                             workflow: WorkflowHandler,
-                             group_aggregation_column: str):
+    def import_beneficiaries(
+        self,
+        import_file: InMemoryUploadedFile,
+        benefit_plan: BenefitPlan,
+        workflow: WorkflowHandler,
+        group_aggregation_column: str
+    ):
         upload = self._save_sources(import_file)
-        self._create_benefit_plan_data_upload_records(benefit_plan, workflow, upload, group_aggregation_column)
+        self._create_benefit_plan_data_upload_records(
+            benefit_plan, workflow, upload, group_aggregation_column
+        )
         self._trigger_workflow(workflow, upload, benefit_plan)
         return {'success': True, 'data': {'upload_uuid': upload.uuid}}
 
     @transaction.atomic
     def _save_sources(self, import_file):
-        # Method separated as workflow execution must be independent of the atomic transaction.
+        # Method separated as workflow execution must be independent of
+        # the atomic transaction.
         upload = self._create_upload_entry(import_file.name)
         dataframe = self._load_import_file(import_file)
         self._validate_dataframe(dataframe)
@@ -248,7 +455,9 @@ class BeneficiaryImportService:
         return upload
 
     @transaction.atomic
-    def _create_benefit_plan_data_upload_records(self, benefit_plan, workflow, upload, group_aggregation_column):
+    def _create_benefit_plan_data_upload_records(
+        self, benefit_plan, workflow, upload, group_aggregation_column
+    ):
         record = BenefitPlanDataUploadRecords(
             data_upload=upload,
             benefit_plan=benefit_plan,
@@ -257,59 +466,87 @@ class BeneficiaryImportService:
         )
         record.save(user=self.user)
 
-    def validate_import_beneficiaries(self, upload_id: uuid, individual_sources, benefit_plan: BenefitPlan):
+    def validate_import_beneficiaries(
+        self, upload_id: uuid, individual_sources, benefit_plan: BenefitPlan
+    ):
         dataframe = self._load_dataframe(individual_sources)
-        validated_dataframe, invalid_items = self._validate_possible_beneficiaries(
-            dataframe,
-            benefit_plan,
-            upload_id
+        validated_dataframe, invalid_items = (
+            self._validate_possible_beneficiaries(
+                dataframe,
+                benefit_plan,
+                upload_id
+            )
         )
-        return {'success': True, 'data': validated_dataframe, 'summary_invalid_items': invalid_items}
+        return {
+            'success': True,
+            'data': validated_dataframe,
+            'summary_invalid_items': invalid_items
+        }
 
-    def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
+    def create_task_with_importing_valid_items(
+        self, upload_id: uuid, benefit_plan: BenefitPlan
+    ):
         if SocialProtectionConfig.enable_maker_checker_for_beneficiary_upload:
             BeneficiaryTaskCreatorService(self.user) \
-                .create_task_with_importing_valid_items(upload_id, benefit_plan)
+                .create_task_with_importing_valid_items(
+                    upload_id, benefit_plan)
         else:
             record = BenefitPlanDataUploadRecords.objects.get(
                 data_upload_id=upload_id,
                 is_deleted=False
             )
-            from social_protection.signals.on_validation_import_valid_items import IndividualItemsImportTaskCompletionEvent
+            from social_protection.signals.on_validation_import_valid_items \
+                import IndividualItemsImportTaskCompletionEvent
+            workflow = (
+                SocialProtectionConfig.validation_import_valid_items_workflow
+            )
             IndividualItemsImportTaskCompletionEvent(
-                SocialProtectionConfig.validation_import_valid_items_workflow,
+                workflow,
                 record,
                 record.data_upload.id,
                 record.benefit_plan,
                 self.user
             ).run_workflow()
 
-    def create_task_with_update_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
-        if SocialProtectionConfig.enable_maker_checker_for_beneficiary_update:
+    def create_task_with_update_valid_items(
+        self, upload_id: uuid, benefit_plan: BenefitPlan
+    ):
+        mc_enabled = (
+            SocialProtectionConfig.enable_maker_checker_for_beneficiary_update
+        )
+        if mc_enabled:
             BeneficiaryTaskCreatorService(self.user)\
-                .create_task_with_update_valid_items(upload_id, benefit_plan)
+                .create_task_with_update_valid_items(
+                    upload_id, benefit_plan)
 
-        # Resolve automatically if maker-checker not enabled
-        if not SocialProtectionConfig.enable_maker_checker_for_beneficiary_update:
-            from social_protection.signals.on_validation_import_valid_items import IndividualItemsUploadTaskCompletionEvent
+        if not mc_enabled:
+            from social_protection.signals.on_validation_import_valid_items \
+                import IndividualItemsUploadTaskCompletionEvent
             record = BenefitPlanDataUploadRecords.objects.get(
                 data_upload_id=upload_id,
                 benefit_plan=benefit_plan,
                 is_deleted=False
             )
+            workflow = (
+                SocialProtectionConfig.validation_upload_valid_items_workflow
+            )
             IndividualItemsUploadTaskCompletionEvent(
-                SocialProtectionConfig.validation_upload_valid_items_workflow,
+                workflow,
                 record,
                 record.data_upload.id,
                 record.benefit_plan,
                 self.user
             ).run_workflow()
 
-    def synchronize_data_for_reporting(self, upload_id: uuid, benefit_plan: BenefitPlan):
+    def synchronize_data_for_reporting(
+        self, upload_id: uuid, benefit_plan: BenefitPlan
+    ):
         self._synchronize_individual(upload_id)
         self._synchronize_beneficiary(benefit_plan, upload_id)
 
-    def _validate_possible_beneficiaries(self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid):
+    def _validate_possible_beneficiaries(
+        self, dataframe: DataFrame, benefit_plan: BenefitPlan, upload_id: uuid
+    ):
 
         if isinstance(benefit_plan.beneficiary_data_schema, str):
             schema_dict = json.loads(benefit_plan.beneficiary_data_schema)
@@ -320,7 +557,10 @@ class BeneficiaryImportService:
         calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
         calculation = get_calculation_object(calculation_uuid)
 
-        unique_fields = [field for field, props in properties.items() if "uniqueness" in props]
+        unique_fields = [
+            field for field, props in properties.items()
+            if "uniqueness" in props
+        ]
         unique_validations = {}
         if unique_fields:
             unique_validations = {
@@ -328,7 +568,8 @@ class BeneficiaryImportService:
                 for field in unique_fields
             }
 
-        # TODO: Use ProcessPoolExecutor after resolving django dependency loading issue
+        # TODO: Use ProcessPoolExecutor after resolving django
+        # dependency loading issue
         validated_dataframe = BeneficiaryImportService.process_chunk(
             dataframe,
             properties,
@@ -342,23 +583,30 @@ class BeneficiaryImportService:
         return validated_dataframe, invalid_items
 
     @staticmethod
-    def process_chunk(chunk, properties, unique_validations, calculation, calculation_uuid):
+    def process_chunk(
+        chunk, properties, unique_validations, calculation, calculation_uuid
+    ):
         validated_dataframe = []
-        for _, row in chunk.iterrows():
+        for row_idx, row in chunk.iterrows():
             field_validation = {'row': row.to_dict(), 'validations': {}}
             for field, field_properties in properties.items():
 
-                # Validation Calculation
-                if "validationCalculation" in field_properties and field in row:
-                    validation_name = field_properties["validationCalculation"]["name"]
-                    field_validation['validations'][field] = calculation.calculate_if_active_for_object(
-                        validation_name,
-                        calculation_uuid,
-                        field_name=field,
-                        field_value=row[field]
+                if (
+                    "validationCalculation" in field_properties
+                    and field in row
+                ):
+                    validation_name = (
+                        field_properties["validationCalculation"]["name"]
+                    )
+                    field_validation['validations'][field] = (
+                        calculation.calculate_if_active_for_object(
+                            validation_name,
+                            calculation_uuid,
+                            field_name=field,
+                            field_value=row[field]
+                        )
                     )
 
-                # Uniqueness Check
                 if "uniqueness" in field_properties and field in row:
                     field_validation['validations'][f'{field}_uniqueness'] = {
                         'success': not unique_validations[field].loc[row.name]
@@ -368,8 +616,12 @@ class BeneficiaryImportService:
 
         return validated_dataframe
 
-    def _handle_uniqueness(self, row, field, field_properties, benefit_plan, dataframe):
-        unique_class_validation = SocialProtectionConfig.unique_class_validation
+    def _handle_uniqueness(
+        self, row, field, field_properties, benefit_plan, dataframe
+    ):
+        unique_class_validation = (
+            SocialProtectionConfig.unique_class_validation
+        )
         calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
         calculation = get_calculation_object(calculation_uuid)
         result_row = calculation.calculate_if_active_for_object(
@@ -383,7 +635,9 @@ class BeneficiaryImportService:
         return result_row
 
     def _handle_validation_calculation(self, row, field, field_properties):
-        validation_calculation = field_properties.get("validationCalculation", {}).get("name")
+        validation_calculation = field_properties.get(
+            "validationCalculation", {}
+        ).get("name")
         if not validation_calculation:
             raise ValueError("Missing validation name")
         calculation_uuid = SocialProtectionConfig.validation_calculation_uuid
@@ -397,7 +651,9 @@ class BeneficiaryImportService:
         return result_row
 
     def _create_upload_entry(self, filename):
-        upload = IndividualDataSourceUpload(source_name=filename, source_type='beneficiary import')
+        upload = IndividualDataSourceUpload(
+            source_name=filename, source_type='beneficiary import'
+        )
         upload.save(username=self.user.login_name)
         return upload
 
@@ -409,14 +665,18 @@ class BeneficiaryImportService:
 
     def _load_import_file(self, import_file) -> pd.DataFrame:
         if import_file.content_type not in self.import_loaders:
-            raise ValueError("Unsupported content type: {}".format(import_file.content_type))
+            raise ValueError(
+                "Unsupported content type: {}".format(import_file.content_type)
+            )
 
         return self.import_loaders[import_file.content_type](import_file)
 
-    def _save_data_source(self, dataframe: pd.DataFrame, upload: IndividualDataSourceUpload):
+    def _save_data_source(
+        self, dataframe: pd.DataFrame, upload: IndividualDataSourceUpload
+    ):
         data_source_objects = []
 
-        for _, row in dataframe.iterrows():
+        for idx, row in dataframe.iterrows():
             ds = IndividualDataSource(
                 upload=upload,
                 json_ext=json.loads(row.to_json()),
@@ -430,32 +690,43 @@ class BeneficiaryImportService:
         IndividualDataSource.objects.bulk_create(data_source_objects)
 
     def _save_row(self, row, upload):
-        ds = IndividualDataSource(upload=upload, json_ext=json.loads(row.to_json()), validations={})
+        ds = IndividualDataSource(
+            upload=upload, json_ext=json.loads(row.to_json()), validations={}
+        )
         ds.save(username=self.user.login_name)
 
     def _load_dataframe(self, individual_sources) -> pd.DataFrame:
         return load_dataframe(individual_sources)
 
-    def _trigger_workflow(self,
-                          workflow: WorkflowHandler,
-                          upload: IndividualDataSourceUpload,
-                          benefit_plan: BenefitPlan):
+    def _trigger_workflow(
+        self,
+        workflow: WorkflowHandler,
+        upload: IndividualDataSourceUpload,
+        benefit_plan: BenefitPlan
+    ):
         try:
             # Before the run in order to avoid racing conditions
             upload.status = IndividualDataSourceUpload.Status.TRIGGERED
             upload.save(username=self.user.login_name)
 
             result = workflow.run({
-                # Core user UUID required
-                'user_uuid': str(User.objects.get(username=self.user.login_name).id),
+                'user_uuid': str(
+                    User.objects.get(username=self.user.login_name).id
+                ),
                 'benefit_plan_uuid': str(benefit_plan.uuid),
                 'upload_uuid': str(upload.uuid),
             })
 
-            # Conditions are safety measure for workflows. Usually handles like PythonHandler or LightningHandler
-            #  should follow this pattern but return type is not determined in workflow.run abstract.
-            if result and isinstance(result, dict) and result.get('success') is False:
-                raise ValueError(result.get('message', 'Unexpected error during the workflow execution'))
+            if (
+                result
+                and isinstance(result, dict)
+                and result.get('success') is False
+            ):
+                raise ValueError(
+                    result.get(
+                        'message', 'Unexpected error during the workflow'
+                    )
+                )
         except ValueError as e:
             upload.status = IndividualDataSourceUpload.Status.FAIL
             upload.error = {'workflow': str(e)}
@@ -484,7 +755,9 @@ class BeneficiaryImportService:
             )
 
         if data_sources_to_update:
-            IndividualDataSource.objects.bulk_update(data_sources_to_update, ['validations'])
+            IndividualDataSource.objects.bulk_update(
+                data_sources_to_update, ['validations']
+            )
 
     def _synchronize_individual(self, upload_id):
         individuals_to_update = Individual.objects.filter(
@@ -504,7 +777,10 @@ class BeneficiaryImportService:
     def _synchronize_beneficiary(self, benefit_plan, upload_id):
         unique_uuids = list((
             Beneficiary.objects
-            .filter(benefit_plan=benefit_plan, individual__individualdatasource__upload_id=upload_id)
+            .filter(
+                benefit_plan=benefit_plan,
+                individual__individualdatasource__upload_id=upload_id
+            )
             .values_list('id', flat=True)
             .distinct()
         ))
@@ -528,11 +804,23 @@ class BeneficiaryTaskCreatorService:
     def __init__(self, user):
         self.user = user
 
-    def create_task_with_importing_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
-        self._create_task(benefit_plan, upload_id, SocialProtectionConfig.validation_import_valid_items)
+    def create_task_with_importing_valid_items(
+        self, upload_id: uuid, benefit_plan: BenefitPlan
+    ):
+        self._create_task(
+            benefit_plan,
+            upload_id,
+            SocialProtectionConfig.validation_import_valid_items
+        )
 
-    def create_task_with_update_valid_items(self, upload_id: uuid, benefit_plan: BenefitPlan):
-        self._create_task(benefit_plan, upload_id, SocialProtectionConfig.validation_upload_valid_items)
+    def create_task_with_update_valid_items(
+        self, upload_id: uuid, benefit_plan: BenefitPlan
+    ):
+        self._create_task(
+            benefit_plan,
+            upload_id,
+            SocialProtectionConfig.validation_upload_valid_items
+        )
 
     @register_service_signal('socialProtection.update_task')
     @transaction.atomic()
@@ -549,20 +837,25 @@ class BeneficiaryTaskCreatorService:
             'benefit_plan_code': benefit_plan.code,
             'source_name': upload_record.data_upload.source_name,
             'workflow': upload_record.workflow,
-            'percentage_of_invalid_items': self.__calculate_percentage_of_invalid_items(upload_id),
+            'percentage_of_invalid_items': (
+                self.__calculate_percentage_of_invalid_items(upload_id)
+            ),
             'data_upload_id': str(upload_id)
         }
         TaskService(self.user).create({
             'source': 'import_valid_items',
             'entity': upload_record,
             'status': Task.Status.RECEIVED,
-            'executor_action_event': TasksManagementConfig.default_executor_event,
+            'executor_action_event': (
+                TasksManagementConfig.default_executor_event
+            ),
             'business_event': business_event,
             'json_ext': json_ext
         })
 
         data_upload = upload_record.data_upload
-        data_upload.status = IndividualDataSourceUpload.Status.WAITING_FOR_VERIFICATION
+        status = IndividualDataSourceUpload.Status.WAITING_FOR_VERIFICATION
+        data_upload.status = status
         data_upload.save(user=self.user)
 
     def __calculate_percentage_of_invalid_items(self, upload_id):
@@ -573,7 +866,9 @@ class BeneficiaryTaskCreatorService:
         if total_items == 0:
             percentage_of_invalid_items = 0
         else:
-            percentage_of_invalid_items = (number_of_invalid_items / total_items) * 100
+            percentage_of_invalid_items = (
+                (number_of_invalid_items / total_items) * 100
+            )
 
         percentage_of_invalid_items = round(percentage_of_invalid_items, 2)
         return percentage_of_invalid_items
@@ -604,18 +899,14 @@ class ProjectService(BaseService):
 
     @register_service_signal('project_service.undo_delete')
     def undo_delete(self, obj_data):
-        try:
-            with transaction.atomic():
-                self.validation_class.validate_undo_delete(obj_data)
-                obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data['id']).first()
-                obj_.is_deleted = False
-                obj_.save(user=self.user.user)
-                return {
-                    "success": True,
-                    "message": "Ok",
-                    "detail": "Undo Delete",
-                }
-        except Exception as exc:
-            return output_exception(
-                model_name=self.OBJECT_TYPE.__name__, method="undo_delete", exception=exc
-            )
+        self.validation_class.validate_undo_delete(obj_data)
+        obj_ = self.OBJECT_TYPE.objects.filter(
+            id=obj_data['id']
+        ).first()
+        obj_.is_deleted = False
+        obj_.save(user=self.user)
+        return {
+            "success": True,
+            "message": "Ok",
+            "detail": "Undo Delete",
+        }

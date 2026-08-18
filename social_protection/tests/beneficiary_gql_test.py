@@ -11,7 +11,13 @@ from social_protection.tests.test_helpers import (
     add_individual_to_benefit_plan,
     create_project,
 )
+from social_protection.models import (
+    BeneficiaryProjectTimeEntry, Beneficiary, BeneficiaryProjectEnrollment,
+    BeneficiaryStatus,
+)
 from social_protection.services import BeneficiaryService
+from social_protection.apps import SocialProtectionConfig
+from core.models import Role, RoleRight, UserRole
 from location.test_helpers import create_test_village
 import json
 
@@ -23,6 +29,30 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         user = mock.Mock(is_anonymous=True)
 
     @classmethod
+    def _add_permissions_to_user(cls, user, permission_codes):
+        """Add specific permissions to a user"""
+        if hasattr(user, 'i_user') and user.i_user:
+            role = Role.objects.create(
+                name=f"TestRole_{user.username}",
+                is_system=0,
+                is_blocked=False,
+                audit_user_id=-1
+            )
+
+            for perm_code in permission_codes:
+                RoleRight.objects.create(
+                    role=role,
+                    right_id=int(perm_code),
+                    audit_user_id=-1
+                )
+
+            UserRole.objects.create(
+                user=user.i_user,
+                role=role,
+                audit_user_id=-1
+            )
+
+    @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.filter(username='Admin', i_user__isnull=False).first()
@@ -30,6 +60,20 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             cls.user = create_test_interactive_user(username='Admin')
         # some test data so as to created contract properly
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
+
+        cls.test_officer = create_test_interactive_user(
+            username="beneficiaryUserNoRight", roles=[1])
+        cls.test_officer_token = BaseTestContext(user=cls.test_officer).get_jwt()
+
+        cls.enroll_user = create_test_interactive_user(
+            username="beneficiaryEnrollUser", roles=[1])
+        cls._add_permissions_to_user(cls.enroll_user, SocialProtectionConfig.gql_project_beneficiary_enroll_perms)
+        cls.enroll_user_token = BaseTestContext(user=cls.enroll_user).get_jwt()
+
+        cls.time_entry_user = create_test_interactive_user(
+            username="beneficiaryTimeEntryUser", roles=[1])
+        cls._add_permissions_to_user(cls.time_entry_user, SocialProtectionConfig.gql_project_beneficiary_time_entry_perms)
+        cls.time_entry_user_token = BaseTestContext(user=cls.time_entry_user).get_jwt()
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
             'code': 'SGQLTest',
             'type': "INDIVIDUAL"
@@ -347,14 +391,19 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             self.user.username,
         )
 
-        # Link the project to the ACTIVE beneficiary
-        self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).update(project=project)
+        # Create enrollment for the ACTIVE beneficiary
+        beneficiary = self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary.status != BeneficiaryStatus.ACTIVE:
+            beneficiary.status = BeneficiaryStatus.ACTIVE
+            beneficiary.save(username=self.user.username)
+        enrollment = BeneficiaryProjectEnrollment(beneficiary=beneficiary, project=project)
+        enrollment.save(user=self.user)
 
-        # Query with projectId filter
+        # Query with enrolled_in_project filter
         query_str = f"""
             query {{
               beneficiary(
-                project_Id: "{project.uuid}",
+                enrolledInProject: "{project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -365,9 +414,11 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
                     individual {{
                       firstName
                     }}
-                    project {{
-                      id
-                      name
+                    projectEnrollments {{
+                      project {{
+                        id
+                        name
+                      }}
                     }}
                     status
                   }}
@@ -385,7 +436,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         returned_node = beneficiary_data['edges'][0]['node']
         self.assertEqual(returned_node['individual']['firstName'], self.individual.first_name)
         self.assertEqual(returned_node['status'], 'ACTIVE')
-        self.assertEqual(returned_node['project']['name'], project.name)
+        self.assertEqual(returned_node['projectEnrollments'][0]['project']['name'], project.name)
 
     def test_query_beneficiary_village_or_child_of_filter(self):
         child_village = create_test_village({'code': 'BeneV1', 'name': 'Beneficiary Village 1'})
@@ -435,16 +486,23 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
 
     def test_project_beneficiary_enrollment(self):
         project = create_project(
-            'test enrollment project',
+            'test enrollment permission project',
             self.benefit_plan,
             self.user.username,
         )
+
+        # Get the beneficiary ID (not individual ID)
+        beneficiary = Beneficiary.objects.filter(
+            individual=self.individual,
+            benefit_plan=self.benefit_plan
+        ).first()
+        beneficiary_id = beneficiary.id
 
         query_str = f'''
             mutation {{
               enrollProject(
                 input: {{
-                  ids: ["{self.individual_1child.id}", "{self.individual_2child.id}"]
+                  ids: ["{beneficiary_id}"]
                   projectId: "{str(project.id)}"
                 }}
               ) {{
@@ -453,15 +511,38 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
               }}
             }}
         '''
+
+        # Test for unauthenticated user
+        response = self.query(query_str)
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollProject']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        # Test for user without permission (test_officer)
         response = self.query(
             query_str,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
         )
         self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollProject']
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
 
-        content = json.loads(response.content)
-        internal_id = content['data']['enrollProject']['internalId']
-        self.assert_mutation_success(internal_id, self.user_token)
+        # Test enrollment with authorized user
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.enroll_user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['enrollProject']
+        self.assert_mutation_success(data['internalId'], self.enroll_user_token)
+
+        # Verify that expected project enrollment is persisted in the db
+        enrollment = BeneficiaryProjectEnrollment.objects.filter(
+            beneficiary=beneficiary,
+            project=project,
+            is_deleted=False
+        ).first()
+        self.assertIsNotNone(enrollment)
 
     def test_query_beneficiary_search(self):
         # search matches on first name
@@ -619,15 +700,21 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             allows_multiple_enrollments=False,
         )
 
-        # Assign self.individual_2child to the exclusive project
-        self.individual_2child.beneficiary_set\
-            .filter(benefit_plan=self.benefit_plan)\
-            .update(project=exclusive_project)
+        # Enroll self.individual_2child in the exclusive project
+        beneficiary_2child = self.individual_2child.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary_2child.status != BeneficiaryStatus.ACTIVE:
+            beneficiary_2child.status = BeneficiaryStatus.ACTIVE
+            beneficiary_2child.save(username=self.user.username)
+        enrollment_2child = BeneficiaryProjectEnrollment(beneficiary=beneficiary_2child, project=exclusive_project)
+        enrollment_2child.save(user=self.user)
 
-        # Assign self.individual_1child to the multi project
-        self.individual_1child.beneficiary_set\
-            .filter(benefit_plan=self.benefit_plan)\
-            .update(project=multi_project)
+        # Enroll self.individual_1child in the multi project
+        beneficiary_1child = self.individual_1child.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary_1child.status != BeneficiaryStatus.ACTIVE:
+            beneficiary_1child.status = BeneficiaryStatus.ACTIVE
+            beneficiary_1child.save(username=self.user.username)
+        enrollment_1child = BeneficiaryProjectEnrollment(beneficiary=beneficiary_1child, project=multi_project)
+        enrollment_1child.save(user=self.user)
 
         # Query using multi-enrollment project filter — should exclude 2child,
         # include 1child & no-project
@@ -635,7 +722,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             query {{
               beneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{multi_project.id}",
+                eligibleForProject: "{multi_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -664,7 +751,7 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
             query {{
               beneficiary(
                 benefitPlan_Id: "{self.benefit_plan.uuid}",
-                projectAllowsMultipleEnrollments: "{exclusive_project.id}",
+                eligibleForProject: "{exclusive_project.id}",
                 isDeleted: false,
                 first: 10
               ) {{
@@ -687,3 +774,151 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertIn(self.individual_2child.first_name, returned_names)  # already enrolled in this project
         self.assertIn(self.individual.first_name, returned_names)         # not enrolled in any project
         self.assertNotIn(self.individual_1child.first_name, returned_names)  # enrolled in a different project
+
+    def test_query_beneficiary_project_time_entries(self):
+        project = create_project(
+            'ProgressTrackingProject',
+            self.benefit_plan,
+            self.user.username,
+            allows_multiple_enrollments=True,
+        )
+        beneficiary = self.individual.beneficiary_set.filter(benefit_plan=self.benefit_plan).first()
+        if beneficiary.status != BeneficiaryStatus.ACTIVE:
+            beneficiary.status = BeneficiaryStatus.ACTIVE
+            beneficiary.save(username=self.user.username)
+        enrollment = BeneficiaryProjectEnrollment(beneficiary=beneficiary, project=project)
+        enrollment.save(user=self.user)
+
+        BeneficiaryProjectTimeEntry(
+            enrollment=enrollment, day_number=1, percent_complete=25
+        ).save(username=self.user.username)
+        BeneficiaryProjectTimeEntry(
+            enrollment=enrollment, day_number=2, percent_complete=80
+        ).save(username=self.user.username)
+        BeneficiaryProjectTimeEntry(
+            enrollment=enrollment, day_number=3, percent_complete=100
+        ).save(username=self.user.username)
+
+        query_str = f"""
+        query {{
+          beneficiary(
+            enrolledInProject: "{project.id}",
+            isDeleted: false,
+            first: 10
+          ) {{
+            totalCount
+            edges {{
+              node {{
+                individual {{
+                  firstName
+                }}
+                projectEnrollments {{
+                  project {{
+                    id
+                    name
+                  }}
+                  timeEntries {{
+                    id
+                    dayNumber
+                    percentComplete
+                  }}
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        response_data = json.loads(response.content)
+        beneficiary_data = response_data['data']['beneficiary']
+
+        self.assertEqual(beneficiary_data['totalCount'], 1)
+        node = beneficiary_data['edges'][0]['node']
+
+        # Verify basic beneficiary info
+        self.assertEqual(node['individual']['firstName'], self.individual.first_name)
+        self.assertEqual(node['projectEnrollments'][0]['project']['name'], project.name)
+
+        # Verify time entries
+        time_entries = node['projectEnrollments'][0]['timeEntries']
+        self.assertEqual(len(time_entries), 3)
+
+        # Check order and values
+        sorted_entries = sorted(time_entries, key=lambda e: e['dayNumber'])
+        self.assertEqual([e['dayNumber'] for e in sorted_entries], [1, 2, 3])
+        self.assertEqual([e['percentComplete'] for e in sorted_entries], [25, 80, 100])
+
+    def test_bulk_update_beneficiary_time_entries(self):
+        project = create_project(
+            'test time entry permission project',
+            self.benefit_plan,
+            self.user.username,
+        )
+
+        # Enroll beneficiary to project
+        beneficiary = Beneficiary.objects.filter(
+            individual=self.individual,
+            benefit_plan=self.benefit_plan
+        ).first()
+        if beneficiary.status != BeneficiaryStatus.ACTIVE:
+            beneficiary.status = BeneficiaryStatus.ACTIVE
+            beneficiary.save(username=self.user.username)
+        enrollment = BeneficiaryProjectEnrollment(
+            beneficiary=beneficiary,
+            project=project
+        )
+        enrollment.save(user=self.user)
+
+        query_str = f'''
+            mutation {{
+              bulkUpdateBeneficiaryTimeEntries(
+                input: {{
+                  timeEntries: [{{
+                    enrollmentId: "{str(enrollment.id)}"
+                    dayNumber: 1
+                    percentComplete: 50
+                  }}]
+                }}
+              ) {{
+                clientMutationId
+                internalId
+              }}
+            }}
+        '''
+
+        # Test for unauthenticated user
+        response = self.query(query_str)
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateBeneficiaryTimeEntries']
+        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+
+        # Test for user without permission (test_officer)
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.test_officer_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateBeneficiaryTimeEntries']
+        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
+
+        # Test time entry update with authorized user
+        response = self.query(
+            query_str,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.time_entry_user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['bulkUpdateBeneficiaryTimeEntries']
+        self.assert_mutation_success(data['internalId'], self.time_entry_user_token)
+
+        # Verify that expected time entry is persisted in the db
+        time_entry = BeneficiaryProjectTimeEntry.objects.filter(
+            enrollment=enrollment,
+            day_number=1
+        ).first()
+        self.assertIsNotNone(time_entry)
+        self.assertEqual(time_entry.percent_complete, 50)

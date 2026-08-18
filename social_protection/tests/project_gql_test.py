@@ -1,7 +1,7 @@
 import json
 from core.models import User
 from core.models.openimis_graphql_test_case import BaseTestContext
-from core.test_helpers import create_test_interactive_user, create_enrolment_officer_role
+from core.test_helpers import create_test_interactive_user, create_test_role
 from social_protection.tests.test_helpers import (
     PatchedOpenIMISGraphQLTestCase,
     find_or_create_activity,
@@ -23,7 +23,7 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         username = cls.user.username
 
         cls.test_officer = create_test_interactive_user(
-            username="projectUserNoRight", roles=[create_enrolment_officer_role().id])  # 1 is a generic role with no project access
+            username="projectUserNoRight", roles=[create_test_role().id])  # with no project access
         cls.test_officer_token = BaseTestContext(user=cls.test_officer).get_jwt()
 
         # Required dependencies
@@ -498,6 +498,52 @@ class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
         self.assertResponseNoErrors(response)
         data = json.loads(response.content)['data']['undoDeleteProject']
         self.assert_mutation_error(data['internalId'], self.user_token, "does not exist")
+
+    def test_undo_delete_project_mutation_duplicate_name(self):
+        deleted = Project(
+            name="DupUndoName",
+            benefit_plan=self.benefit_plan,
+            activity=self.activity,
+            location=self.location,
+            target_beneficiaries=50,
+            working_days=30,
+            is_deleted=True,
+        )
+        deleted.save(username=self.user.username)
+
+        Project(
+            name="DupUndoName",
+            benefit_plan=self.benefit_plan,
+            activity=self.activity,
+            location=self.location,
+            target_beneficiaries=50,
+            working_days=30,
+        ).save(username=self.user.username)
+
+        mutation = """
+        mutation UndoDeleteProject($input: UndoDeleteProjectMutationInput!) {
+          undoDeleteProject(input: $input) {
+            clientMutationId
+            internalId
+          }
+        }
+        """
+        variables = {
+            "input": {
+                "ids": [str(deleted.id)],
+                "clientMutationId": "undo_dup"
+            }
+        }
+        response = self.query(
+            mutation,
+            variables=variables,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.user_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        data = json.loads(response.content)['data']['undoDeleteProject']
+        self.assert_mutation_error(
+            data['internalId'], self.user_token, "name_exists"
+        )
 
     def test_project_history_query_success(self):
         query = """
