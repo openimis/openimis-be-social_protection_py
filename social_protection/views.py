@@ -54,9 +54,11 @@ def is_valid_file(import_file):
 
 
 def get_global_schema_fields(benefit_plan):
-    schema = (benefit_plan.beneficiary_data_schema
-              if benefit_plan.beneficiary_data_schema
-              else json.loads(IndividualConfig.individual_schema))
+    schema = (
+        benefit_plan.beneficiary_data_schema
+        if benefit_plan and benefit_plan.beneficiary_data_schema
+        else json.loads(IndividualConfig.individual_schema)
+    )
     schema_properties = set(schema.get('properties', {}).keys())
     schema_properties.update(
         ['recipient_info', 'individual_role', 'group_code']
