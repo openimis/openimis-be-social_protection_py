@@ -5,8 +5,9 @@ import uuid
 import pandas as pd
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils.translation import gettext as _
+from psycopg2 import sql
 from pandas import DataFrame
 
 from calculation.services import get_calculation_object
@@ -734,7 +735,7 @@ class BeneficiaryImportService:
             return upload
 
     def save_validation_error_in_data_source_bulk(self, validated_dataframe):
-        data_sources_to_update = []
+        values = []
 
         for field_validation in validated_dataframe:
             row = field_validation['row']
@@ -747,17 +748,24 @@ class BeneficiaryImportService:
                         "note": value.get('note')
                     })
 
-            data_sources_to_update.append(
-                IndividualDataSource(
-                    id=row['id'],
-                    validations={'validation_errors': error_fields}
-                )
-            )
+            values.append((row['id'], json.dumps({"validation_errors": error_fields})))
 
-        if data_sources_to_update:
-            IndividualDataSource.objects.bulk_update(
-                data_sources_to_update, ['validations']
-            )
+        if values:
+            update_queries = []
+            for val in values:
+                update_queries.append(
+                    sql.SQL(
+                        'UPDATE individual_individualdatasource SET validations = {validations}::jsonb WHERE "UUID" = {uuid}::uuid;')
+                    .format(
+                        validations=sql.Literal(val[1]),
+                        uuid=sql.Literal(val[0])
+                    )
+                )
+
+            query = sql.SQL(" ").join(update_queries)
+
+            with connection.cursor() as cursor:
+                cursor.execute(query)
 
     def _synchronize_individual(self, upload_id):
         individuals_to_update = Individual.objects.filter(
