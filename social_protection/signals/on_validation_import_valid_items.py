@@ -321,22 +321,28 @@ def on_task_complete_action(business_event, **kwargs):
     upload_record = None
     try:
         upload_record = BenefitPlanDataUploadRecords.objects.get(id=task['entity_id'])
+        completion_user = User.objects.get(id=data['user']['id'])
 
         # A task that followed an approval flow accumulated its per-record
-        # verdicts across every step. Drop what was rejected before running
-        # the workflow, so the import proceeds with the surviving rows - the
-        # same shape as the flat path, where a rejected row is soft-deleted
-        # and whatever remains is imported.
+        # verdicts across every step. accepted=None below means "no filter,
+        # process the whole upload" (both SQL workflows already support
+        # this) - a flow task instead passes the surviving ids explicitly,
+        # which both paths already know how to honour via
+        # "accepted IS NULL OR ... = ANY(accepted)".
+        accepted_ids = None
         task_obj = Task.objects.filter(id=task['id']).first()
         if task_obj and task_obj.flow_id:
             from tasks_management.signals import flow_rejected_record_ids
             rejected = flow_rejected_record_ids(task_obj)
-            if rejected:
-                logger.info(
-                    "social_protection.flow: dropping %s record(s) rejected during "
-                    "the approval flow of task %s", len(rejected), task_obj.id,
-                )
-                _delete_rejected(list(rejected), task_obj.source)
+            universe = set(str(i) for i in IndividualDataSource.objects.filter(
+                upload_id=upload_record.data_upload.id, is_deleted=False,
+            ).values_list('id', flat=True))
+            accepted_ids = list(universe - rejected)
+            logger.info(
+                "social_protection.flow: task %s completion restricted to %s "
+                "surviving record(s) of %s (%s rejected during the approval flow)",
+                task_obj.id, len(accepted_ids), len(universe), len(rejected),
+            )
 
         if business_event == SocialProtectionConfig.validation_import_valid_items:
             workflow = SocialProtectionConfig.validation_import_valid_items_workflow
@@ -345,7 +351,8 @@ def on_task_complete_action(business_event, **kwargs):
                 upload_record,
                 upload_record.data_upload.id,
                 upload_record.benefit_plan,
-                User.objects.get(id=data['user']['id'])
+                completion_user,
+                accepted_ids,
             ).run_workflow()
         elif business_event == SocialProtectionConfig.validation_upload_valid_items:
             workflow = SocialProtectionConfig.validation_upload_valid_items_workflow
@@ -354,7 +361,8 @@ def on_task_complete_action(business_event, **kwargs):
                 upload_record,
                 upload_record.data_upload.id,
                 upload_record.benefit_plan,
-                User.objects.get(id=data['user']['id'])
+                completion_user,
+                accepted_ids,
             ).run_workflow()
         elif business_event == SocialProtectionConfig.validation_enrollment:
             individuals_to_enroll = Individual.objects.filter(
