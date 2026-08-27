@@ -20,6 +20,7 @@ from social_protection.apps import SocialProtectionConfig
 from social_protection.models import BenefitPlan, BenefitPlanDataUploadRecords
 from social_protection.signals.on_validation_import_valid_items import (
     IndividualItemsImportTaskCompletionEvent,
+    IndividualItemsUploadTaskCompletionEvent,
 )
 from tasks_management.apps import TasksManagementConfig
 from tasks_management.models import Task, TaskExecutor, TaskFlow, TaskFlowStep, TaskGroup
@@ -68,13 +69,13 @@ class FlowBatchCompletionTestCase(TestCase):
             sources.append(source)
         return upload_record, sources
 
-    def _flow_task(self, flow, step, upload_record):
+    def _flow_task(self, flow, step, upload_record, business_event=None):
         task = Task(
             source='import_valid_items',
             entity=upload_record,
             status=Task.Status.ACCEPTED,
             executor_action_event=TasksManagementConfig.default_executor_event,
-            business_event=SocialProtectionConfig.validation_import_valid_items,
+            business_event=business_event or SocialProtectionConfig.validation_import_valid_items,
             business_status={}, data={},
             flow=flow, current_step=step, task_group=step.task_group,
         )
@@ -139,3 +140,48 @@ class FlowBatchCompletionTestCase(TestCase):
         self.assertEqual(accepted_ids, {str(sources[2].id)})
         self.assertNotIn(str(sources[0].id), accepted_ids)
         self.assertNotIn(str(sources[1].id), accepted_ids)
+
+    def test_upload_completion_receives_only_surviving_records(self):
+        """
+        The update/upload path (validation_upload_valid_items) routes through
+        a different completion event than the import path, and it is the one
+        that flips beneficiary_update_valid onto its accepted-filtered SQL
+        procedure - so it needs its own assertion that survivors are what
+        reaches it.
+        """
+        flow, step1, step2 = self._two_step_flow('SP_FBC_UPLOAD')
+        upload_record, sources = self._upload_with_sources(3)
+        task = self._flow_task(
+            flow, step1, upload_record,
+            business_event=SocialProtectionConfig.validation_upload_valid_items,
+        )
+
+        result = self._vote(task, self.exec_a, {
+            'ACCEPT': [str(sources[1].id), str(sources[2].id)],
+            'REJECT': [str(sources[0].id)],
+        })
+        self.assertTrue(result.get('success'), result)
+        task.refresh_from_db()
+        self.assertEqual(task.current_step_id, step2.id)
+
+        captured = []
+
+        def fake_run_workflow(self):
+            captured.append(self)
+
+        with patch.object(
+            IndividualItemsUploadTaskCompletionEvent, 'run_workflow',
+            autospec=True, side_effect=fake_run_workflow,
+        ) as mock_run:
+            result = self._vote(task, self.exec_b, {
+                'ACCEPT': [str(sources[2].id)],
+                'REJECT': [str(sources[1].id)],
+            })
+            self.assertTrue(result.get('success'), result)
+            task.refresh_from_db()
+            self.assertEqual(task.status, Task.Status.COMPLETED)
+            mock_run.assert_called_once()
+
+        self.assertEqual(len(captured), 1)
+        accepted_ids = set(captured[0].accepted)
+        self.assertEqual(accepted_ids, {str(sources[2].id)})

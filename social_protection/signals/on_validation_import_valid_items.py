@@ -123,7 +123,11 @@ class BaseGroupColumnAggregationClass(ItemsUploadTaskCompletionEvent):
     def group_data_sources_into_entities(upload_id, user, benefit_plan, accepted: List[str] = None):
         data_sources = GroupDataSource.objects.filter(upload_id=upload_id, group=None)
 
-        if accepted:
+        # `is not None`, not truthiness: an approval flow that rejected every
+        # row passes an empty list, which means "process nothing". Treating
+        # [] as "no filter" would import the whole upload - the exact inverse
+        # of the guarantee. None still means "no flow, process everything".
+        if accepted is not None:
             data_sources = data_sources.filter(id__in=accepted)
 
         service = GroupService(user)
