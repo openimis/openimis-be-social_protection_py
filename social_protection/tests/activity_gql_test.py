@@ -1,6 +1,6 @@
 import json
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase, BaseTestContext
-from core.test_helpers import create_test_interactive_user, create_enrolment_officer_role
+from core.test_helpers import create_test_interactive_user, create_test_role
 from social_protection.tests.test_helpers import find_or_create_activity
 
 
@@ -13,7 +13,7 @@ class ActivitiesGQLTest(openIMISGraphQLTestCase):
         username = cls.user.username
 
         cls.med_enroll_officer = create_test_interactive_user(
-            username="medEONoRight", roles=[create_enrolment_officer_role().id])
+            username="noRight", roles=[create_test_role().id])
         cls.med_enroll_officer_token = BaseTestContext(user=cls.med_enroll_officer).get_jwt()
 
         cls.activity_1 = find_or_create_activity("Nutrition Outreach", username)

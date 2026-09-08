@@ -123,7 +123,11 @@ class BaseGroupColumnAggregationClass(ItemsUploadTaskCompletionEvent):
     def group_data_sources_into_entities(upload_id, user, benefit_plan, accepted: List[str] = None):
         data_sources = GroupDataSource.objects.filter(upload_id=upload_id, group=None)
 
-        if accepted:
+        # `is not None`, not truthiness: an approval flow that rejected every
+        # row passes an empty list, which means "process nothing". Treating
+        # [] as "no filter" would import the whole upload - the exact inverse
+        # of the guarantee. None still means "no flow, process everything".
+        if accepted is not None:
             data_sources = data_sources.filter(id__in=accepted)
 
         service = GroupService(user)
@@ -321,6 +325,29 @@ def on_task_complete_action(business_event, **kwargs):
     upload_record = None
     try:
         upload_record = BenefitPlanDataUploadRecords.objects.get(id=task['entity_id'])
+        completion_user = User.objects.get(id=data['user']['id'])
+
+        # A task that followed an approval flow accumulated its per-record
+        # verdicts across every step. accepted=None below means "no filter,
+        # process the whole upload" (both SQL workflows already support
+        # this) - a flow task instead passes the surviving ids explicitly,
+        # which both paths already know how to honour via
+        # "accepted IS NULL OR ... = ANY(accepted)".
+        accepted_ids = None
+        task_obj = Task.objects.filter(id=task['id']).first()
+        if task_obj and task_obj.flow_id:
+            from tasks_management.signals import flow_rejected_record_ids
+            rejected = flow_rejected_record_ids(task_obj)
+            universe = set(str(i) for i in IndividualDataSource.objects.filter(
+                upload_id=upload_record.data_upload.id, is_deleted=False,
+            ).values_list('id', flat=True))
+            accepted_ids = list(universe - rejected)
+            logger.info(
+                "social_protection.flow: task %s completion restricted to %s "
+                "surviving record(s) of %s (%s rejected during the approval flow)",
+                task_obj.id, len(accepted_ids), len(universe), len(rejected),
+            )
+
         if business_event == SocialProtectionConfig.validation_import_valid_items:
             workflow = SocialProtectionConfig.validation_import_valid_items_workflow
             IndividualItemsImportTaskCompletionEvent(
@@ -328,7 +355,8 @@ def on_task_complete_action(business_event, **kwargs):
                 upload_record,
                 upload_record.data_upload.id,
                 upload_record.benefit_plan,
-                User.objects.get(id=data['user']['id'])
+                completion_user,
+                accepted_ids,
             ).run_workflow()
         elif business_event == SocialProtectionConfig.validation_upload_valid_items:
             workflow = SocialProtectionConfig.validation_upload_valid_items_workflow
@@ -337,7 +365,8 @@ def on_task_complete_action(business_event, **kwargs):
                 upload_record,
                 upload_record.data_upload.id,
                 upload_record.benefit_plan,
-                User.objects.get(id=data['user']['id'])
+                completion_user,
+                accepted_ids,
             ).run_workflow()
         elif business_event == SocialProtectionConfig.validation_enrollment:
             individuals_to_enroll = Individual.objects.filter(
@@ -513,6 +542,14 @@ def on_task_resolve(**kwargs):
 
             # Task only relevant for this specific source
             if task.source != 'import_valid_items':
+                return
+
+            # A task following an approval flow is resolved by
+            # tasks_management's batch path: each vote is recorded per record
+            # against the current step, and the surviving set is applied once
+            # at completion. Resolving here as well would run the import on
+            # the first vote, bypassing every later step.
+            if task.flow_id:
                 return
 
             if not task.task_group:
