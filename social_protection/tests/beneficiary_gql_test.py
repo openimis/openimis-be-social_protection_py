@@ -1,11 +1,17 @@
+from django.utils.translation import gettext as _
 from unittest import mock
 from core.models import User
-from core.models.openimis_graphql_test_case import BaseTestContext
-from core.test_helpers import create_test_interactive_user
+from core.models.openimis_graphql_test_case import (
+    BaseTestContext,
+    openIMISGraphQLTestCase,
+)
+from core.test_helpers import (
+    create_right_only_user,
+    create_test_interactive_user,
+)
 from social_protection import schema as sp_schema
 from graphene import Schema
 from social_protection.tests.test_helpers import (
-    PatchedOpenIMISGraphQLTestCase,
     create_benefit_plan,
     create_individual,
     add_individual_to_benefit_plan,
@@ -16,41 +22,15 @@ from social_protection.models import (
     BeneficiaryStatus,
 )
 from social_protection.services import BeneficiaryService
-from social_protection.apps import SocialProtectionConfig
-from core.models import Role, RoleRight, UserRole
 from location.test_helpers import create_test_village
 import json
 
 
-class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
+class BeneficiaryGQLTest(openIMISGraphQLTestCase):
     schema = Schema(query=sp_schema.Query)
 
     class AnonymousUserContext:
         user = mock.Mock(is_anonymous=True)
-
-    @classmethod
-    def _add_permissions_to_user(cls, user, permission_codes):
-        """Add specific permissions to a user"""
-        if hasattr(user, 'i_user') and user.i_user:
-            role = Role.objects.create(
-                name=f"TestRole_{user.username}",
-                is_system=0,
-                is_blocked=False,
-                audit_user_id=-1
-            )
-
-            for perm_code in permission_codes:
-                RoleRight.objects.create(
-                    role=role,
-                    right_id=int(perm_code),
-                    audit_user_id=-1
-                )
-
-            UserRole.objects.create(
-                user=user.i_user,
-                role=role,
-                audit_user_id=-1
-            )
 
     @classmethod
     def setUpClass(cls):
@@ -61,18 +41,18 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         # some test data so as to created contract properly
         cls.user_token = BaseTestContext(user=cls.user).get_jwt()
 
-        cls.test_officer = create_test_interactive_user(
-            username="beneficiaryUserNoRight", roles=[1])
+        # NB: not roles=[1] -- that is "IMIS Administrator", whose is_imis_admin
+        # flag makes has_perms() return True for every right, so the user under
+        # test would not actually be missing any permission.
+        cls.test_officer = create_right_only_user("beneficiaryUserNoRight", [])
         cls.test_officer_token = BaseTestContext(user=cls.test_officer).get_jwt()
 
-        cls.enroll_user = create_test_interactive_user(
-            username="beneficiaryEnrollUser", roles=[1])
-        cls._add_permissions_to_user(cls.enroll_user, SocialProtectionConfig.gql_project_beneficiary_enroll_perms)
+        cls.enroll_user = create_right_only_user(
+            "beneficiaryEnrollUser", ["gql_project_beneficiary_enroll_perms"])
         cls.enroll_user_token = BaseTestContext(user=cls.enroll_user).get_jwt()
 
-        cls.time_entry_user = create_test_interactive_user(
-            username="beneficiaryTimeEntryUser", roles=[1])
-        cls._add_permissions_to_user(cls.time_entry_user, SocialProtectionConfig.gql_project_beneficiary_time_entry_perms)
+        cls.time_entry_user = create_right_only_user(
+            "beneficiaryTimeEntryUser", ["gql_project_beneficiary_time_entry_perms"])
         cls.time_entry_user_token = BaseTestContext(user=cls.time_entry_user).get_jwt()
         cls.benefit_plan = create_benefit_plan(cls.user.username, payload_override={
             'code': 'SGQLTest',
@@ -516,7 +496,12 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         response = self.query(query_str)
         self.assertResponseNoErrors(response)
         data = json.loads(response.content)['data']['enrollProject']
-        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+        # These two conditions come from core's BaseMutation, which passes the
+        # message key through gettext, so assert the rendered message. The
+        # mutations defined in this module raise the bare key instead.
+        self.assert_mutation_error(
+            data['internalId'], self.user_token,
+            _("mutation.authentication_required"))
 
         # Test for user without permission (test_officer)
         response = self.query(
@@ -525,7 +510,8 @@ class BeneficiaryGQLTest(PatchedOpenIMISGraphQLTestCase):
         )
         self.assertResponseNoErrors(response)
         data = json.loads(response.content)['data']['enrollProject']
-        self.assert_mutation_error(data['internalId'], self.test_officer_token, 'unauthorized')
+        self.assert_mutation_error(
+            data['internalId'], self.test_officer_token, _("unauthorized"))
 
         # Test enrollment with authorized user
         response = self.query(
