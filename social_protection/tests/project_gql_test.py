@@ -1,9 +1,11 @@
 import json
 from core.models import User
-from core.models.openimis_graphql_test_case import BaseTestContext
+from core.models.openimis_graphql_test_case import (
+    BaseTestContext,
+    openIMISGraphQLTestCase,
+)
 from core.test_helpers import create_test_interactive_user, create_test_role
 from social_protection.tests.test_helpers import (
-    PatchedOpenIMISGraphQLTestCase,
     find_or_create_activity,
     find_or_create_benefit_plan,
 )
@@ -12,7 +14,7 @@ from location.test_helpers import create_test_village
 import uuid
 
 
-class ProjectsGQLTest(PatchedOpenIMISGraphQLTestCase):
+class ProjectsGQLTest(openIMISGraphQLTestCase):
 
     @classmethod
     def setUpTestData(cls):
