@@ -1,3 +1,5 @@
+import random
+import string
 from typing import Iterable
 
 import pandas as pd
@@ -8,6 +10,17 @@ from individual.models import IndividualDataSource
 
 
 BULK_ENROLLMENT_BATCH_SIZE = 1000
+
+
+def generate_benefit_plan_code(date_valid_from=None):
+    """Generate a unique YYYY plus five-digit BenefitPlan code."""
+    from social_protection.models import BenefitPlan
+    year = f"{date_valid_from:%Y}" if date_valid_from else ''.join(random.choices(string.digits, k=4))
+    while True:
+        suffix = ''.join(random.choices(string.digits, k=5))
+        code = f"{year}{suffix}"
+        if not BenefitPlan.objects.filter(code=code).exists():
+            return code
 
 
 def bulk_create_in_batches(manager, objects, batch_size=BULK_ENROLLMENT_BATCH_SIZE):

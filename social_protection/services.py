@@ -28,6 +28,7 @@ from social_protection.models import (
 from social_protection.phase_defaults import apply_benefit_plan_creation_defaults
 
 from social_protection.utils import (
+    generate_benefit_plan_code,
     load_dataframe,
     fetch_summary_of_valid_items,
     fetch_summary_of_broken_items,
@@ -61,6 +62,8 @@ class BenefitPlanService(BaseService, UpdateCheckerLogicServiceMixin):
             SocialProtectionConfig.benefit_plan_creation_defaults,
             obj_data,
         )
+        # code is always server-generated, never accepted from the client
+        data_with_defaults['code'] = generate_benefit_plan_code(data_with_defaults.get('date_valid_from'))
         return super().create(data_with_defaults)
 
     @register_service_signal('benefit_plan_service.update')
