@@ -59,6 +59,8 @@ class ProjectStatus(models.TextChoices):
 
 
 class Project(core_models.HistoryBusinessModel):
+    row_scope = core_models.LocationScope("location")
+
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     name = models.CharField(max_length=255, null=False)
     status = models.CharField(
@@ -80,6 +82,8 @@ class ProjectMutation(UUIDModel, ObjectMutation):
 
 
 class BeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
+    row_scope = core_models.ParentScope("beneficiary")
+
     beneficiary = models.ForeignKey(
         'Beneficiary',
         models.DO_NOTHING,
@@ -110,6 +114,8 @@ class BeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
 
 
 class GroupBeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
+    row_scope = core_models.ParentScope("group_beneficiary")
+
     group_beneficiary = models.ForeignKey(
         'GroupBeneficiary',
         models.DO_NOTHING,
