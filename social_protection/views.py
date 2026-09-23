@@ -22,6 +22,23 @@ from workflow.services import WorkflowService
 
 logger = logging.getLogger(__name__)
 
+# A BORROWED RIGHT, KNOWN AND NOT FIXED HERE.
+#
+# The six views below handle beneficiaries (import, validation, export of the invalid
+# rows, synchronisation), and should therefore be guarded by the rights of the module's
+# `beneficiary` entity: `gql_beneficiary_search_perms` (170001) and
+# `gql_beneficiary_create_perms` (170002), which `Beneficiary.get_rights` exposes.
+#
+# They check instead `IndividualConfig.gql_individual_search_perms` (159001) and
+# `gql_individual_create_perms` (159002) - the rights of the register of people, from
+# another module. Holding 159002 is therefore enough to import beneficiaries into a
+# programme without holding 170002; `download_template_benefit_plan_file` is the only
+# one that does read the module's own right (170002).
+#
+# Fixing the call sites is another batch of work: doing it here would withdraw access
+# from the roles that today carry only 159001/159002. This comment exists so that the
+# borrowing stops being invisible.
+
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx"}
 ALLOWED_MIME_TYPES = {

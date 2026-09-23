@@ -18,6 +18,25 @@ class BeneficiaryStatus(models.TextChoices):
 
 
 class BenefitPlan(core_models.HistoryBusinessModel):
+    @classmethod
+    def get_rights(cls, action):
+        """
+        The rights governing an action on a programme, for GraphQL as for REST.
+
+        Redeclares nothing: the rights table is
+        `social_protection.apps.DJANGO_PERMS`, by entity then by action, and
+        `configured_perms` reads the *configured* value there - the one
+        ModuleConfiguration may have overridden - and not the declared default. The
+        read happens inside the method and never at import time: the `_perms` keys only
+        hold their value after `ready()`, and a snapshot taken at import would capture
+        an empty list, which `has_perms` grants to everybody.
+
+        "close" (160005) is available just like the four canonical actions.
+        """
+        from social_protection.apps import configured_perms
+
+        return configured_perms("benefitPlan", action)
+
     class BenefitPlanType(models.TextChoices):
         INDIVIDUAL_TYPE = "INDIVIDUAL", _("INDIVIDUAL")
         GROUP_TYPE = "GROUP", _("GROUP")
@@ -45,6 +64,13 @@ class BenefitPlanMutation(UUIDModel, ObjectMutation):
 
 
 class Activity(core_models.HistoryBusinessModel):
+    @classmethod
+    def get_rights(cls, action):
+        """Only "query" (208001) is declared: the activity has no mutation."""
+        from social_protection.apps import configured_perms
+
+        return configured_perms("activity", action)
+
     name = models.CharField(max_length=255, null=False, unique=True)
 
     class Meta:
@@ -59,6 +85,17 @@ class ProjectStatus(models.TextChoices):
 
 
 class Project(core_models.HistoryBusinessModel):
+    @classmethod
+    def get_rights(cls, action):
+        """
+        The rights of an action on a project. Besides the four canonical ones, the
+        entity carries two business actions: "enroll" (209005) and "timeEntry"
+        (209006).
+        """
+        from social_protection.apps import configured_perms
+
+        return configured_perms("project", action)
+
     row_scope = core_models.LocationScope("location")
 
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
@@ -82,6 +119,20 @@ class ProjectMutation(UUIDModel, ObjectMutation):
 
 
 class BeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
+    # No `scope_parent = "project"`: inheritance takes the action *of the same name*
+    # on the parent, so creating an enrolment would go through `project.create`
+    # (209002), whereas the call site (ProjectEnrollmentMutation) requires
+    # `project.enroll` (209005). So the mapping is written out explicitly.
+    @classmethod
+    def get_rights(cls, action):
+        from social_protection.apps import configured_perms
+
+        if action in ("create", "delete", "enroll"):
+            return configured_perms("project", "enroll")
+        # None = no rule declared: the caller must fail closed. Enrolments are only
+        # read through the project or the beneficiary.
+        return None
+
     row_scope = core_models.ParentScope("beneficiary")
 
     beneficiary = models.ForeignKey(
@@ -114,6 +165,16 @@ class BeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
 
 
 class GroupBeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
+    # Same right as the individual enrolment: `project.enroll` (209005) covers both
+    # variants, which is what ProjectGroupEnrollmentMutation does.
+    @classmethod
+    def get_rights(cls, action):
+        from social_protection.apps import configured_perms
+
+        if action in ("create", "delete", "enroll"):
+            return configured_perms("project", "enroll")
+        return None
+
     row_scope = core_models.ParentScope("group_beneficiary")
 
     group_beneficiary = models.ForeignKey(
@@ -146,6 +207,20 @@ class GroupBeneficiaryProjectEnrollment(core_models.HistoryBusinessModel):
 
 
 class Beneficiary(core_models.HistoryBusinessModel):
+    @classmethod
+    def get_rights(cls, action):
+        """
+        The rights of an action on a beneficiary (170001-170004).
+
+        A known borrowing, not fixed here: the six REST views of `views.py` are guarded
+        by the `individual` module's rights (159001/159002) and not by these. This
+        access point gives the *expected* right; changing the call sites is another
+        batch of work.
+        """
+        from social_protection.apps import configured_perms
+
+        return configured_perms("beneficiary", action)
+
     individual = models.ForeignKey(Individual, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     status = models.CharField(max_length=100, choices=BeneficiaryStatus.choices, null=False)
@@ -187,6 +262,20 @@ class AbstractProjectTimeEntry(core_models.HistoryBusinessModel):
 
     class Meta:
         abstract = True
+
+    @classmethod
+    def get_rights(cls, action):
+        """
+        Recording the daily progress is the project's `timeEntry` business action
+        (209006), not an `update` of the project - hence the explicit mapping rather
+        than a `scope_parent`. Both subclasses (individual and group) inherit it, the
+        right being common to the two as it is at the call site.
+        """
+        from social_protection.apps import configured_perms
+
+        if action in ("create", "update", "timeEntry"):
+            return configured_perms("project", "timeEntry")
+        return None
 
     def _get_enrollment_instance(self):
         """
@@ -244,6 +333,11 @@ class GroupBeneficiaryProjectTimeEntry(AbstractProjectTimeEntry):
         return self.enrollment
 
 
+# No `get_rights` and no `scope_parent` here: the only call site
+# (Query.resolve_beneficiary_data_upload_history) guards this history with
+# `gql_beneficiary_search_perms` (170001), whereas the object belongs to the programme.
+# Declaring `scope_parent = "benefit_plan"` would change the right enforced (160001);
+# the discrepancy is reported to the audit and fixed in another batch of work.
 class BenefitPlanDataUploadRecords(core_models.HistoryModel):
     data_upload = models.ForeignKey(IndividualDataSourceUpload, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
@@ -254,6 +348,23 @@ class BenefitPlanDataUploadRecords(core_models.HistoryModel):
 
 
 class GroupBeneficiary(core_models.HistoryBusinessModel):
+    @classmethod
+    def get_rights(cls, action):
+        """
+        Group beneficiaries are guarded by the rights of the `beneficiary` entity
+        (170001-170004): that is what Create/Update/DeleteGroupBeneficiaryMutation and
+        the group resolvers do, and the catalogue holds neither an identifier nor a
+        config key specific to them. The alias is therefore declared here, on the
+        model, rather than invented as an entity with no right of its own in
+        `DJANGO_PERMS`.
+
+        No `scope_parent = "benefit_plan"`: that would enforce the programme's rights
+        (160xxx), which are not the ones the call sites check.
+        """
+        from social_protection.apps import configured_perms
+
+        return configured_perms("beneficiary", action)
+
     group = models.ForeignKey(Group, models.DO_NOTHING, null=False)
     benefit_plan = models.ForeignKey(BenefitPlan, models.DO_NOTHING, null=False)
     status = models.CharField(max_length=100, choices=BeneficiaryStatus.choices, null=False)
