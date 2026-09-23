@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-05-22 14:19+0200\n"
+"POT-Creation-Date: 2026-09-17 16:48+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,83 +17,189 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: social_protection/schema.py:41 social_protection/schema.py:50
+#: social_protection/gql_mutations.py:727
+#: social_protection/gql_mutations.py:757 social_protection/schema.py:210
+#: social_protection/schema.py:222 social_protection/schema.py:234
+#: social_protection/schema.py:669
+#: social_protection/tests/beneficiary_gql_test.py:506
+#: social_protection/tests/group_beneficiary_gql_test.py:795
 msgid "unauthorized"
 msgstr "User not authorized for this operation"
 
-#: social_protection/validation.py:54
-#: social_protection/validation.py:46
+#: social_protection/models.py:14
+msgid "POTENTIAL"
+msgstr ""
+
+#: social_protection/models.py:15
+msgid "ACTIVE"
+msgstr ""
+
+#: social_protection/models.py:16
+msgid "GRADUATED"
+msgstr ""
+
+#: social_protection/models.py:17
+msgid "SUSPENDED"
+msgstr ""
+
+#: social_protection/models.py:22
+msgid "INDIVIDUAL"
+msgstr ""
+
+#: social_protection/models.py:23
+msgid "GROUP"
+msgstr ""
+
+#: social_protection/models.py:56
+msgid "PREPARATION"
+msgstr ""
+
+#: social_protection/models.py:57
+msgid "IN PROGRESS"
+msgstr ""
+
+#: social_protection/models.py:58
+msgid "COMPLETED"
+msgstr ""
+
+#: social_protection/models.py:102
+#, fuzzy
+#| msgid "Beneficiary Project Time Entry"
+msgid "Beneficiary Project Enrollment"
+msgstr "Beneficiary Project Time Entry"
+
+#: social_protection/models.py:103
+#, fuzzy
+#| msgid "Beneficiary Project Time Entries"
+msgid "Beneficiary Project Enrollments"
+msgstr "Beneficiary Project Time Entries"
+
+#: social_protection/models.py:107
+msgid "Only ACTIVE beneficiaries can be enrolled in a project."
+msgstr ""
+
+#: social_protection/models.py:109
+msgid "Beneficiary and project must belong to the same program."
+msgstr ""
+
+#: social_protection/models.py:134
+#, fuzzy
+#| msgid "Group Beneficiary Project Time Entry"
+msgid "Group Beneficiary Project Enrollment"
+msgstr "Group Beneficiary Project Time Entry"
+
+#: social_protection/models.py:135
+#, fuzzy
+#| msgid "Group Beneficiary Project Time Entries"
+msgid "Group Beneficiary Project Enrollments"
+msgstr "Group Beneficiary Project Time Entries"
+
+#: social_protection/models.py:139
+msgid "Only ACTIVE group beneficiaries can be enrolled in a project."
+msgstr ""
+
+#: social_protection/models.py:141
+#, fuzzy
+#| msgid "Group Beneficiary Project Time Entries"
+msgid "Group beneficiary and project must belong to the same program."
+msgstr "Group Beneficiary Project Time Entries"
+
+#: social_protection/models.py:157
+msgid "Beneficiary must be associated with an individual benefit plan."
+msgstr ""
+
+#: social_protection/models.py:203 social_protection/services.py:400
 #, python-format
-msgid "social_protection.validation.benefit_plan.code_exists"
-msgstr "BenefitPlan code %(code) already exists"
-
-#: social_protection/validation.py:61
-#: social_protection/validation.py:55
-#, python-format
-msgid "social_protection.validation.benefit_plan.name_exists"
-msgstr "BenefitPlan name %(name) already exists"
-
-#: social_protection/validation.py:73
-msgid "social_protection.validation.field_empty"
-msgstr "%(field) can't be empty"
-
-msgid "social_protection.validation.project.name_exists"
-msgstr "Project name %(name) already exists"
-
-msgid "Invalid file type. Allowed: .csv, .xls, .xlsx"
-msgstr "Invalid file type. Allowed: .csv, .xls, .xlsx"
-
-msgid "Could not determine file type"
-msgstr "Could not determine file type"
-
-msgid "Invalid MIME type:"
-msgstr "Invalid MIME type:"
-
-#: models.py
-msgid "Beneficiary must be assigned to a project before recording time entries."
-msgstr "Beneficiary must be assigned to a project before recording time entries."
-
-#: models.py
 msgid "Day number must be between 1 and %(working_days)s."
 msgstr "Day number must be between 1 and %(working_days)s."
 
-#: models.py
+#: social_protection/models.py:223
 msgid "Beneficiary Project Time Entry"
 msgstr "Beneficiary Project Time Entry"
 
-#: models.py
+#: social_protection/models.py:224
 msgid "Beneficiary Project Time Entries"
 msgstr "Beneficiary Project Time Entries"
 
-#: models.py
+#: social_protection/models.py:240
 msgid "Group Beneficiary Project Time Entry"
 msgstr "Group Beneficiary Project Time Entry"
 
-#: models.py
+#: social_protection/models.py:241
 msgid "Group Beneficiary Project Time Entries"
 msgstr "Group Beneficiary Project Time Entries"
 
-#: services.py
-msgid "No time entries to update"
-msgstr "No time entries to update"
+#: social_protection/models.py:265
+msgid "Group beneficiary must be associated with a benefit plan type = GROUP."
+msgstr ""
 
-#: services.py
-msgid "Project not found"
-msgstr "Project not found"
+#: social_protection/services.py:339
+#, python-format
+msgid ""
+"%(label)s %(ids)s are already enrolled in another project. This project does "
+"not allow multiple enrollments."
+msgstr ""
 
-#: services.py
-msgid "Invalid beneficiary IDs or not in project: %(ids)s"
-msgstr "Invalid beneficiary IDs or not in project: %(ids)s"
+#: social_protection/services.py:390
+#, python-format
+msgid "Invalid enrollment IDs: %(ids)s"
+msgstr ""
 
-#: services.py
-msgid "Invalid group beneficiary IDs or not in project: %(ids)s"
-msgstr "Invalid group beneficiary IDs or not in project: %(ids)s"
-
-#: services.py
-msgid "Created %(created)s, updated %(updated)s time entries"
-msgstr "Created %(created)s, updated %(updated)s time entries"
-
-#: services.py
+#: social_protection/services.py:407
 msgid "Percent complete must be between 0 and 100."
 msgstr "Percent complete must be between 0 and 100."
 
+#: social_protection/validation.py:65
+msgid "code"
+msgstr ""
+
+#: social_protection/validation.py:75 social_protection/validation.py:101
+msgid "name"
+msgstr ""
+
+#: social_protection/validation.py:81
+msgid "social_protection.validation.field_empty"
+msgstr "%(field) can't be empty"
+
+#: social_protection/views.py:44
+msgid "Invalid file type. Allowed: .csv, .xls, .xlsx"
+msgstr "Invalid file type. Allowed: .csv, .xls, .xlsx"
+
+#: social_protection/views.py:48
+msgid "Could not determine file type"
+msgstr "Could not determine file type"
+
+#: social_protection/views.py:51
+msgid "Invalid MIME type:"
+msgstr "Invalid MIME type:"
+
+#, python-format
+#~ msgid "social_protection.validation.benefit_plan.code_exists"
+#~ msgstr "BenefitPlan code %(code) already exists"
+
+#, python-format
+#~ msgid "social_protection.validation.benefit_plan.name_exists"
+#~ msgstr "BenefitPlan name %(name) already exists"
+
+#~ msgid "social_protection.validation.project.name_exists"
+#~ msgstr "Project name %(name) already exists"
+
+#~ msgid ""
+#~ "Beneficiary must be assigned to a project before recording time entries."
+#~ msgstr ""
+#~ "Beneficiary must be assigned to a project before recording time entries."
+
+#~ msgid "No time entries to update"
+#~ msgstr "No time entries to update"
+
+#~ msgid "Project not found"
+#~ msgstr "Project not found"
+
+#~ msgid "Invalid beneficiary IDs or not in project: %(ids)s"
+#~ msgstr "Invalid beneficiary IDs or not in project: %(ids)s"
+
+#~ msgid "Invalid group beneficiary IDs or not in project: %(ids)s"
+#~ msgstr "Invalid group beneficiary IDs or not in project: %(ids)s"
+
+#~ msgid "Created %(created)s, updated %(updated)s time entries"
+#~ msgstr "Created %(created)s, updated %(updated)s time entries"

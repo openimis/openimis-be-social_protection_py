@@ -256,11 +256,7 @@ class ProjectsGQLTest(openIMISGraphQLTestCase):
         }
         """ % (self.benefit_plan.id, self.activity.id, self.location.uuid)
 
-        response = self.query(mutation)
-        self.assertResponseNoErrors(response)
-
-        data = json.loads(response.content)['data']['createProject']
-        self.assert_mutation_error(data['internalId'], self.user_token, "authentication_required")
+        self.assert_unauthenticated(self.query(mutation))
 
     def test_create_project_mutation_missing_required_field(self):
         mutation = """
@@ -343,13 +339,7 @@ class ProjectsGQLTest(openIMISGraphQLTestCase):
         }
         """ % self.project_1.id
 
-        response = self.query(mutation)
-        self.assertResponseNoErrors(response)
-
-        data = json.loads(response.content)['data']['updateProject']
-        self.assert_mutation_error(
-            data['internalId'], self.user_token, "authentication_required"
-        )
+        self.assert_unauthenticated(self.query(mutation))
 
         response = self.query(
             mutation,
@@ -402,11 +392,7 @@ class ProjectsGQLTest(openIMISGraphQLTestCase):
         }
         """ % (self.project_1.id, self.project_2.id)
 
-        response = self.query(mutation)
-        self.assertResponseNoErrors(response)
-
-        data = json.loads(response.content)['data']['deleteProject']
-        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+        self.assert_unauthenticated(self.query(mutation))
 
         response = self.query(
             mutation,
@@ -458,11 +444,7 @@ class ProjectsGQLTest(openIMISGraphQLTestCase):
         """ % (self.deleted_project.id)
 
         # Test for unauthenticated user
-        response = self.query(undo_mutation)
-        self.assertResponseNoErrors(response)
-
-        data = json.loads(response.content)['data']['undoDeleteProject']
-        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+        self.assert_unauthenticated(self.query(undo_mutation))
 
         # Test for user without permission (test_officer)
         response = self.query(
