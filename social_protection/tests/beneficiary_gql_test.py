@@ -493,15 +493,7 @@ class BeneficiaryGQLTest(openIMISGraphQLTestCase):
         '''
 
         # Test for unauthenticated user
-        response = self.query(query_str)
-        self.assertResponseNoErrors(response)
-        data = json.loads(response.content)['data']['enrollProject']
-        # These two conditions come from core's BaseMutation, which passes the
-        # message key through gettext, so assert the rendered message. The
-        # mutations defined in this module raise the bare key instead.
-        self.assert_mutation_error(
-            data['internalId'], self.user_token,
-            _("mutation.authentication_required"))
+        self.assert_unauthenticated(self.query(query_str))
 
         # Test for user without permission (test_officer)
         response = self.query(
@@ -878,10 +870,7 @@ class BeneficiaryGQLTest(openIMISGraphQLTestCase):
         '''
 
         # Test for unauthenticated user
-        response = self.query(query_str)
-        self.assertResponseNoErrors(response)
-        data = json.loads(response.content)['data']['bulkUpdateBeneficiaryTimeEntries']
-        self.assert_mutation_error(data['internalId'], self.user_token, 'authentication_required')
+        self.assert_unauthenticated(self.query(query_str))
 
         # Test for user without permission (test_officer)
         response = self.query(

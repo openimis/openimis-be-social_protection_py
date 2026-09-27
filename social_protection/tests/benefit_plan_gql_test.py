@@ -88,12 +88,7 @@ class BenefitPlanGQLTest(openIMISGraphQLTestCase):
         }
         """ % bp.id
 
-        response = self.query(mutation)
-        self.assertResponseNoErrors(response)
-        data = json.loads(response.content)['data']['undoDeleteBenefitPlan']
-        self.assert_mutation_error(
-            data['internalId'], self.user_token, 'authentication_required'
-        )
+        self.assert_unauthenticated(self.query(mutation))
 
         response = self.query(
             mutation,
