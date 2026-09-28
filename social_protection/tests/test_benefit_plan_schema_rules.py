@@ -8,6 +8,7 @@ from django.test import TestCase
 from core.test_helpers import LogInHelper
 from individual.schema_usage import schema_usages
 from individual.tests.test_helpers import set_individual_schema
+from social_protection.custom_filters import BenefitPlanCustomFilterWizard
 from social_protection.models import BenefitPlan
 from social_protection.services import BenefitPlanService
 from social_protection.tests.data import service_add_payload
@@ -134,3 +135,38 @@ class BenefitPlanSchemaRulesTest(TestCase):
         self.assertIn('PLAN_OLD: ', out.getvalue())
         self.assertIn('badge', out.getvalue())
         self.assertNotIn('PLAN_OK', out.getvalue())
+
+
+class BenefitPlanFilterValueTypesTest(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = LogInHelper().get_or_create_user_api()
+
+    def setUp(self):
+        super().setUp()
+        service = BenefitPlanService(self.user)
+        for code, income, registered_on in [
+            ('PLAN_LOW', 10.5, '2020-01-15'), ('PLAN_HI', 99.9, '2024-06-01'),
+        ]:
+            payload = copy.deepcopy(service_add_payload)
+            payload.update(code=code, name=code, json_ext={
+                'income': income, 'registered_on': registered_on})
+            self.assertTrue(service.create(payload).get('success'))
+
+    def _codes(self, *custom_filters):
+        query = BenefitPlan.objects.filter(code__in=['PLAN_LOW', 'PLAN_HI'])
+        filtered = BenefitPlanCustomFilterWizard().apply_filter_to_queryset(
+            list(custom_filters), query)
+        return set(filtered.values_list('code', flat=True))
+
+    def test_decimal_values_are_compared_as_numbers(self):
+        self.assertEqual(self._codes('income__gt__decimal=50'), {'PLAN_HI'})
+
+    def test_date_values_are_compared_in_date_order(self):
+        self.assertEqual(
+            self._codes('registered_on__lt__date=2021-01-01'), {'PLAN_LOW'})
+        self.assertEqual(
+            self._codes('registered_on__gte__date="2020-01-15"'),
+            {'PLAN_LOW', 'PLAN_HI'})
