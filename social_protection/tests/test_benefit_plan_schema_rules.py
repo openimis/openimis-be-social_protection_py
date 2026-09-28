@@ -163,6 +163,11 @@ class BenefitPlanFilterValueTypesTest(TestCase):
 
     def test_decimal_values_are_compared_as_numbers(self):
         self.assertEqual(self._codes('income__gt__decimal=50'), {'PLAN_HI'})
+        self.assertEqual(
+            self._codes('income__gt__decimal="50"'), {'PLAN_HI'})
+        stored_criterion = {
+            'field': 'income', 'filter': 'gt', 'type': 'decimal', 'value': 50}
+        self.assertEqual(self._codes(stored_criterion), {'PLAN_HI'})
 
     def test_date_values_are_compared_in_date_order(self):
         self.assertEqual(
