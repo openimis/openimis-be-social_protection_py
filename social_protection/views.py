@@ -1,5 +1,4 @@
 import logging
-import json
 import pandas as pd
 import mimetypes
 import os
@@ -74,7 +73,7 @@ def get_global_schema_fields(benefit_plan):
     schema = (
         benefit_plan.beneficiary_data_schema
         if benefit_plan and benefit_plan.beneficiary_data_schema
-        else json.loads(IndividualConfig.individual_schema)
+        else IndividualConfig.current_individual_schema()
     )
     schema_properties = set(schema.get('properties', {}).keys())
     schema_properties.update(
