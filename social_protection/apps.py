@@ -1,5 +1,4 @@
 import logging
-import json
 
 from django.apps import AppConfig
 
@@ -213,6 +212,10 @@ class SocialProtectionConfig(AppConfig):
         self._set_up_workflows()
         self.__register_masking_class()
         register_reloader(self.name, self._reload_module_config)
+
+        from individual.schema_usage import register_schema_owner
+        from social_protection.models import BenefitPlan
+        register_schema_owner(BenefitPlan, 'code', 'beneficiary_data_schema')
 
     def _reload_module_config(self, instance):
         # `instance._cfg` and not `json.loads(instance.config)`: the property is what

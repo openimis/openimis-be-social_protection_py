@@ -1,8 +1,12 @@
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
-from core.utils import validate_json_schema
 from core.validation import BaseModelValidation, ObjectExistsValidationMixin
+from individual.validation import (
+    schema_dict,
+    schema_errors,
+    schema_subset_errors,
+)
 from social_protection.models import Beneficiary, BenefitPlan, Project
 
 
@@ -51,9 +55,29 @@ def validate_benefit_plan(data, uuid=None):
 
     beneficiary_data_schema = data.get('beneficiary_data_schema')
     if beneficiary_data_schema:
-        validations.extend(validate_json_schema(beneficiary_data_schema))
+        validations.extend(
+            validate_beneficiary_data_schema(beneficiary_data_schema, uuid)
+        )
 
     return validations
+
+
+def validate_beneficiary_data_schema(schema, uuid=None):
+    """
+    The individual schema's field rules, on fields of the individual schema.
+    An update that leaves the stored schema as it is passes, so plans older
+    than that rule keep working until their schema is edited.
+    """
+    parsed = schema_dict(schema)
+    errors = schema_errors(parsed if parsed is not None else schema)
+    if errors:
+        return errors
+    if uuid:
+        stored = BenefitPlan.objects.filter(id=uuid) \
+            .values_list('beneficiary_data_schema', flat=True).first()
+        if schema_dict(stored) == parsed:
+            return []
+    return schema_subset_errors(parsed)
 
 
 def validate_bf_unique_code(code, uuid=None):
