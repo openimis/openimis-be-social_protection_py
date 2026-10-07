@@ -17,7 +17,7 @@ from social_protection.tests.test_helpers import (
     add_individual_to_group, create_group, create_group_with_individual, create_individual,
 )
 from tasks_management.apps import TasksManagementConfig
-from tasks_management.models import Task
+from tasks_management.models import Task, TaskExecutor, TaskFlow, TaskFlowStep, TaskGroup
 from tasks_management.services import TaskService
 
 
@@ -163,3 +163,89 @@ class EnrollmentTaskCompletionTest(TestCase):
             self._complete(task)
         self.assertFalse(GroupBeneficiary.objects.filter(
             group__in=[group_a, group_c], benefit_plan=self.group_plan).exists())
+
+
+class EnrollmentFlowTaskCompletionTest(TestCase):
+    """An enrolment task that followed an approval flow enrols only the records no step rejected."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = create_test_interactive_user(username="sp_enr_flow_admin")
+        cls.exec_a = create_test_interactive_user(username="sp_enr_flow_exec_a")
+        cls.exec_b = create_test_interactive_user(username="sp_enr_flow_exec_b")
+        cls.plan = BenefitPlan(code="ENRFLWI", name="Enrolment flow test",
+                               type=BenefitPlan.BenefitPlanType.INDIVIDUAL_TYPE)
+        cls.plan.save(username=cls.admin.username)
+        cls.group_plan = BenefitPlan(code="ENRFLWG", name="Group enrolment flow test",
+                                     type=BenefitPlan.BenefitPlanType.GROUP_TYPE)
+        cls.group_plan.save(username=cls.admin.username)
+
+    def _two_step_flow(self, code):
+        steps = []
+        flow = TaskFlow(code=code, name=code)
+        flow.save(username=self.admin.username)
+        for order, user in ((1, self.exec_a), (2, self.exec_b)):
+            group = TaskGroup(code=f'{code}_g{order}', completion_policy='ANY')
+            group.save(username=self.admin.username)
+            TaskExecutor(task_group=group, user=user).save(username=self.admin.username)
+            step = TaskFlowStep(flow=flow, task_group=group, order=order)
+            step.save(username=self.admin.username)
+            steps.append(step)
+        return flow, steps
+
+    def _flow_task(self, code, plan, individuals, business_event):
+        flow, steps = self._two_step_flow(code)
+        upload = IndividualDataSourceUpload(source_name='enr_flow', source_type='beneficiary import')
+        upload.save(username=self.admin.username)
+        record = BenefitPlanDataUploadRecords(data_upload=upload, benefit_plan=plan, workflow='Enrollment')
+        record.save(username=self.admin.username)
+        sources = []
+        for individual in individuals:
+            source = IndividualDataSource(upload=upload, individual=individual, json_ext=individual.json_ext,
+                                          validations={})
+            source.save(username=self.admin.username)
+            sources.append(source)
+        task = Task(
+            source='import_valid_items', entity=record, status=Task.Status.ACCEPTED,
+            executor_action_event=TasksManagementConfig.default_executor_event,
+            business_event=business_event, business_status={}, data={},
+            flow=flow, current_step=steps[0], task_group=steps[0].task_group,
+            json_ext={'data_upload_id': str(upload.id), 'benefit_plan_id': str(plan.id),
+                      'beneficiary_status': BeneficiaryStatus.POTENTIAL},
+        )
+        task.save(username=self.admin.username)
+        return task, sources
+
+    def _vote(self, task, user, accept, reject):
+        result = TaskService(user).resolve_task({'id': task.id, 'business_status': {str(user.id): {
+            'ACCEPT': [str(s.id) for s in accept], 'REJECT': [str(s.id) for s in reject]}}})
+        self.assertTrue(result.get('success'), result)
+
+    def _run_flow(self, task, sources):
+        # Step 1 rejects the first record, step 2 the second: only the third survives.
+        self._vote(task, self.exec_a, accept=sources[1:], reject=sources[:1])
+        self._vote(task, self.exec_b, accept=sources[2:], reject=sources[1:2])
+        task.refresh_from_db()
+        self.assertEqual(task.status, Task.Status.COMPLETED)
+
+    def test_individuals_rejected_in_the_flow_are_not_enrolled(self):
+        individuals = [create_individual(self.admin.username) for _ in range(3)]
+        task, sources = self._flow_task('ENR_FLOW_I', self.plan, individuals,
+                                        SocialProtectionConfig.validation_enrollment)
+        self._run_flow(task, sources)
+        enrolled = set(Beneficiary.objects.filter(benefit_plan=self.plan, is_deleted=False)
+                       .values_list('individual_id', flat=True))
+        self.assertEqual(enrolled, {individuals[2].id})
+
+    def test_groups_rejected_in_the_flow_are_not_enrolled(self):
+        heads, groups = [], []
+        for _ in range(3):
+            head, group, _ = create_group_with_individual(self.admin.username)
+            heads.append(head)
+            groups.append(group)
+        task, sources = self._flow_task('ENR_FLOW_G', self.group_plan, heads,
+                                        SocialProtectionConfig.validation_group_enrollment)
+        self._run_flow(task, sources)
+        enrolled = set(GroupBeneficiary.objects.filter(benefit_plan=self.group_plan, is_deleted=False)
+                       .values_list('group_id', flat=True))
+        self.assertEqual(enrolled, {groups[2].id})

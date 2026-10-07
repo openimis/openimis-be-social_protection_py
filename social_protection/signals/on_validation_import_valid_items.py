@@ -379,7 +379,7 @@ def on_task_complete_action(business_event, **kwargs):
                 BenefitPlan.objects.select_for_update(no_key=True).filter(id=benefit_plan_id).first()
                 # The upload is frozen at confirmation; individuals enrolled since then
                 # (e.g. by another enrolment task approved first) are skipped.
-                in_upload = Individual.objects.filter(individualdatasource__upload_id=upload_id).distinct()
+                in_upload = _enrolment_individuals(upload_id, accepted_ids)
                 already_enrolled = Beneficiary.objects.filter(
                     benefit_plan_id=benefit_plan_id, is_deleted=False, individual__in=in_upload,
                 ).values('individual_id')
@@ -422,8 +422,7 @@ def on_task_complete_action(business_event, **kwargs):
                 # head keeps an active membership without role), its only active membership.
                 # Memberships created after the confirmation cannot be the selected group.
                 confirmed_at = IndividualDataSourceUpload.objects.get(id=upload_id).date_created
-                upload_individuals = Individual.objects.filter(
-                    individualdatasource__upload_id=upload_id).distinct()
+                upload_individuals = _enrolment_individuals(upload_id, accepted_ids)
                 memberships = {}
                 for membership in GroupIndividual.objects.filter(
                     individual__in=upload_individuals, is_deleted=False, date_created__lte=confirmed_at,
@@ -490,6 +489,17 @@ def on_task_complete_action(business_event, **kwargs):
             # Todo: this should be changed to system user
             data_upload.save(username=data_upload.user_updated.username)
         logger.error(f"Error while executing on_task_complete_action for {business_event}", exc_info=exc)
+
+
+def _enrolment_individuals(upload_id, accepted_ids):
+    """
+    Individuals of an enrolment upload, from its live records; after an approval
+    flow (accepted_ids not None) only the records no step rejected.
+    """
+    sources = {'individualdatasource__upload_id': upload_id, 'individualdatasource__is_deleted': False}
+    if accepted_ids is not None:
+        sources['individualdatasource__id__in'] = accepted_ids
+    return Individual.objects.filter(**sources).distinct()
 
 
 def on_task_complete_import_validated(**kwargs):
