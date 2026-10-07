@@ -417,54 +417,71 @@ def on_task_complete_action(business_event, **kwargs):
                 # Approvals of the same plan wait for each other, so each one sees
                 # the enrolments the previous one created.
                 BenefitPlan.objects.select_for_update(no_key=True).filter(id=benefit_plan_id).first()
-                # The upload holds the heads of the groups selected at confirmation. Each one's
-                # group is its active HEAD membership; if the head was replaced since (the old
-                # head keeps an active membership without role), its only active membership.
-                # Memberships created after the confirmation cannot be the selected group.
-                confirmed_at = IndividualDataSourceUpload.objects.get(id=upload_id).date_created
-                upload_individuals = _enrolment_individuals(upload_id, accepted_ids)
-                memberships = {}
-                for membership in GroupIndividual.objects.filter(
-                    individual__in=upload_individuals, is_deleted=False, date_created__lte=confirmed_at,
-                ).select_related('group', 'individual'):
-                    memberships.setdefault(membership.individual_id, []).append(membership)
-                groups = {}
+                sources = _enrolment_sources(upload_id, accepted_ids)
+                group_by_source = (upload_record.json_ext or {}).get('group_by_source')
                 unresolved = []
-                for individual in upload_individuals:
-                    active = memberships.get(individual.id, [])
-                    heads = [m for m in active if m.role == GroupIndividual.Role.HEAD]
-                    chosen = heads if heads else active
-                    if len(chosen) != 1:
-                        unresolved.append(str(individual.id))
-                        continue
-                    groups.setdefault(chosen[0].group_id, chosen[0])
+                if group_by_source is not None:
+                    # Each record names the group it was confirmed for.
+                    confirmed = {}
+                    for source in sources.select_related('individual'):
+                        group_id = group_by_source.get(str(source.id))
+                        if group_id:
+                            confirmed.setdefault(group_id, source.individual)
+                        else:
+                            unresolved.append(str(source.id))
+                else:
+                    # Uploads confirmed before the group was recorded: the head's HEAD membership,
+                    # when there is exactly one and it is unchanged since confirmation (a role
+                    # change updates the membership row in place).
+                    confirmed_at = IndividualDataSourceUpload.objects.get(id=upload_id).date_created
+                    individuals = Individual.objects.filter(individualdatasource__in=sources).distinct()
+                    head_of = {}
+                    for membership in GroupIndividual.objects.filter(
+                        individual__in=individuals, role=GroupIndividual.Role.HEAD, is_deleted=False,
+                        date_created__lte=confirmed_at, date_updated__lte=confirmed_at,
+                    ).select_related('individual'):
+                        head_of.setdefault(membership.individual_id, []).append(membership)
+                    confirmed = {}
+                    for individual in individuals:
+                        memberships = head_of.get(individual.id, [])
+                        if len(memberships) == 1:
+                            confirmed.setdefault(str(memberships[0].group_id), individual)
+                        else:
+                            unresolved.append(str(individual.id))
                 if unresolved:
                     logger.warning(
-                        "Group enrolment upload %s: no single group for %s individual(s), not enrolled: %s%s",
+                        "Group enrolment upload %s: no confirmed group for %s record(s) or head(s), not enrolled: %s%s",
                         upload_id, len(unresolved), ', '.join(unresolved[:20]),
                         ' (first 20)' if len(unresolved) > 20 else '')
-                enrolled_group_ids = set(GroupBeneficiary.objects.filter(
+                groups = {str(group.id): group for group in Group.objects.filter(
+                    id__in=confirmed.keys(), is_deleted=False)}
+                deleted = sorted(set(confirmed) - set(groups))
+                if deleted:
+                    logger.warning("Group enrolment upload %s: %s confirmed group(s) deleted since, not enrolled: %s",
+                                   upload_id, len(deleted), ', '.join(deleted[:20]))
+                enrolled_group_ids = {str(group_id) for group_id in GroupBeneficiary.objects.filter(
                     benefit_plan_id=benefit_plan_id,
                     is_deleted=False,
                     group_id__in=groups.keys(),
-                ).values_list('group_id', flat=True))
-                # The group's data comes from its current head, as on direct enrolment.
+                ).values_list('group_id', flat=True)}
+                # The group's data comes from its current head, as on direct enrolment, or
+                # from the head it was confirmed with when it has none now.
                 current_heads = {
-                    head.group_id: head.individual for head in GroupIndividual.objects.filter(
+                    str(head.group_id): head.individual for head in GroupIndividual.objects.filter(
                         group_id__in=groups.keys(), role=GroupIndividual.Role.HEAD, is_deleted=False,
                     ).select_related('individual')
                 }
                 new_group_beneficiaries = [
                     GroupBeneficiary(
-                        group=membership.group,
+                        group=group,
                         benefit_plan_id=benefit_plan_id,
                         status=data['task']['json_ext']['beneficiary_status'],
-                        json_ext=current_heads.get(group_id, membership.individual).json_ext,
+                        json_ext=current_heads.get(group_id, confirmed[group_id]).json_ext,
                         user_created=user,
                         user_updated=user,
                         uuid=uuid.uuid4(),
                     )
-                    for group_id, membership in groups.items()
+                    for group_id, group in groups.items()
                     if group_id not in enrolled_group_ids
                 ]
                 if enrolled_group_ids:
@@ -491,15 +508,21 @@ def on_task_complete_action(business_event, **kwargs):
         logger.error(f"Error while executing on_task_complete_action for {business_event}", exc_info=exc)
 
 
-def _enrolment_individuals(upload_id, accepted_ids):
+def _enrolment_sources(upload_id, accepted_ids):
     """
-    Individuals of an enrolment upload, from its live records; after an approval
-    flow (accepted_ids not None) only the records no step rejected.
+    Live records of an enrolment upload; after an approval flow (accepted_ids not
+    None) only the records no step rejected.
     """
-    sources = {'individualdatasource__upload_id': upload_id, 'individualdatasource__is_deleted': False}
+    sources = IndividualDataSource.objects.filter(upload_id=upload_id, is_deleted=False)
     if accepted_ids is not None:
-        sources['individualdatasource__id__in'] = accepted_ids
-    return Individual.objects.filter(**sources).distinct()
+        sources = sources.filter(id__in=accepted_ids)
+    return sources
+
+
+def _enrolment_individuals(upload_id, accepted_ids):
+    """Individuals of the enrolment records _enrolment_sources keeps."""
+    return Individual.objects.filter(
+        individualdatasource__in=_enrolment_sources(upload_id, accepted_ids)).distinct()
 
 
 def on_task_complete_import_validated(**kwargs):

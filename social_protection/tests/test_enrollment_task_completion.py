@@ -3,16 +3,19 @@ Completing an enrolment task enrols the individuals (or groups) frozen into its
 upload at confirmation time. Two tasks confirmed for the same people before
 either is approved must not enrol them twice.
 """
+from unittest.mock import patch
+
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from core.test_helpers import create_test_interactive_user
-from individual.models import IndividualDataSource, IndividualDataSourceUpload
+from individual.models import Group, IndividualDataSource, IndividualDataSourceUpload
 from social_protection.apps import SocialProtectionConfig
 from social_protection.models import (
     Beneficiary, BeneficiaryStatus, BenefitPlan, BenefitPlanDataUploadRecords, GroupBeneficiary,
 )
+from social_protection.signals.on_confirm_enrollment_of_group import on_confirm_enrollment_of_group
 from social_protection.tests.test_helpers import (
     add_individual_to_group, create_group, create_group_with_individual, create_individual,
 )
@@ -33,21 +36,30 @@ class EnrollmentTaskCompletionTest(TestCase):
                                      type=BenefitPlan.BenefitPlanType.GROUP_TYPE)
         cls.group_plan.save(username=cls.admin.username)
 
-    def _confirmed_task(self, plan, individuals, business_event):
-        """An enrolment task as on_confirm_enrollment_of_individual creates it."""
+    def _confirmed_task(self, plan, individuals, business_event, groups=None):
+        """
+        An enrolment task as the confirmation signals create it. With groups (aligned with
+        individuals), the upload record keeps the group of each record, as group confirmation does.
+        """
         upload = IndividualDataSourceUpload(source_name='enr_dup', source_type='beneficiary import')
         upload.save(username=self.admin.username)
         record = BenefitPlanDataUploadRecords(data_upload=upload, benefit_plan=plan, workflow='Enrollment')
         record.save(username=self.admin.username)
+        sources = []
         for individual in individuals:
-            IndividualDataSource(upload=upload, individual=individual, json_ext=individual.json_ext,
-                                 validations={}).save(username=self.admin.username)
+            source = IndividualDataSource(upload=upload, individual=individual, json_ext=individual.json_ext,
+                                          validations={})
+            source.save(username=self.admin.username)
+            sources.append(source)
+        json_ext = {'data_upload_id': str(upload.id), 'benefit_plan_id': str(plan.id),
+                    'beneficiary_status': BeneficiaryStatus.POTENTIAL}
+        if groups is not None:
+            record.json_ext = {'group_by_source': {str(src.id): str(group.id) for src, group in zip(sources, groups)}}
+            record.save(username=self.admin.username)
         task = Task(
             source='import_valid_items', entity=record, status=Task.Status.ACCEPTED,
             executor_action_event=TasksManagementConfig.default_executor_event,
-            business_event=business_event, business_status={}, data={},
-            json_ext={'data_upload_id': str(upload.id), 'benefit_plan_id': str(plan.id),
-                      'beneficiary_status': BeneficiaryStatus.POTENTIAL},
+            business_event=business_event, business_status={}, data={}, json_ext=json_ext,
         )
         task.save(username=self.admin.username)
         return task
@@ -81,7 +93,8 @@ class EnrollmentTaskCompletionTest(TestCase):
             head, group, _ = create_group_with_individual(self.admin.username)
             heads.append(head)
             groups.append(group)
-        tasks = [self._confirmed_task(self.group_plan, heads, SocialProtectionConfig.validation_group_enrollment)
+        tasks = [self._confirmed_task(self.group_plan, heads, SocialProtectionConfig.validation_group_enrollment,
+                                      groups=groups)
                  for _ in range(2)]
         for task in tasks:
             self._complete(task)
@@ -114,7 +127,8 @@ class EnrollmentTaskCompletionTest(TestCase):
     def test_group_enrolment_after_the_head_was_replaced(self):
         # Replacing a head keeps the former head's membership active, without role.
         former_head, group, membership = create_group_with_individual(self.admin.username)
-        task = self._confirmed_task(self.group_plan, [former_head], SocialProtectionConfig.validation_group_enrollment)
+        task = self._confirmed_task(self.group_plan, [former_head], SocialProtectionConfig.validation_group_enrollment,
+                                    groups=[group])
         membership.role = None
         membership.save(username=self.admin.username)
         new_head = create_individual(self.admin.username, {'json_ext': {'marker': 'new head'}})
@@ -164,6 +178,105 @@ class EnrollmentTaskCompletionTest(TestCase):
         self.assertFalse(GroupBeneficiary.objects.filter(
             group__in=[group_a, group_c], benefit_plan=self.group_plan).exists())
 
+    def test_confirmed_group_is_enrolled_after_its_head_left(self):
+        # Confirmed for A; before approval the head leaves A and stays an ordinary member of B.
+        head, group_a, membership = create_group_with_individual(self.admin.username)
+        _, group_b, _ = create_group_with_individual(self.admin.username)
+        add_individual_to_group(self.admin.username, head, group_b, is_head=False)
+        task = self._confirmed_task(self.group_plan, [head], SocialProtectionConfig.validation_group_enrollment,
+                                    groups=[group_a])
+        membership.delete(username=self.admin.username)
+        self._complete(task)
+        self.assertTrue(GroupBeneficiary.objects.filter(group=group_a, benefit_plan=self.group_plan).exists())
+        self.assertFalse(GroupBeneficiary.objects.filter(group=group_b, benefit_plan=self.group_plan).exists())
+
+    def test_head_of_two_confirmed_groups_enrols_both(self):
+        head, group_a, _ = create_group_with_individual(self.admin.username)
+        group_b = create_group(self.admin.username)
+        add_individual_to_group(self.admin.username, head, group_b)
+        self._complete(self._confirmed_task(
+            self.group_plan, [head, head], SocialProtectionConfig.validation_group_enrollment,
+            groups=[group_a, group_b]))
+        self.assertEqual(GroupBeneficiary.objects.filter(
+            group__in=[group_a, group_b], benefit_plan=self.group_plan, is_deleted=False).count(), 2)
+
+    def test_task_without_recorded_groups_does_not_enrol_a_replaced_head(self):
+        former_head, group, membership = create_group_with_individual(self.admin.username)
+        task = self._confirmed_task(self.group_plan, [former_head], SocialProtectionConfig.validation_group_enrollment)
+        membership.role = None
+        membership.save(username=self.admin.username)
+        add_individual_to_group(self.admin.username, create_individual(self.admin.username), group)
+        with self.assertLogs('social_protection.signals.on_validation_import_valid_items', level='WARNING'):
+            self._complete(task)
+        self.assertFalse(GroupBeneficiary.objects.filter(group=group, benefit_plan=self.group_plan).exists())
+
+    def test_task_without_recorded_groups_does_not_guess_after_the_head_left(self):
+        # Tasks confirmed before groups were recorded: no HEAD membership left -> logged, not enrolled.
+        head, group_a, membership = create_group_with_individual(self.admin.username)
+        _, group_b, _ = create_group_with_individual(self.admin.username)
+        add_individual_to_group(self.admin.username, head, group_b, is_head=False)
+        task = self._confirmed_task(self.group_plan, [head], SocialProtectionConfig.validation_group_enrollment)
+        membership.delete(username=self.admin.username)
+        with self.assertLogs('social_protection.signals.on_validation_import_valid_items', level='WARNING'):
+            self._complete(task)
+        self.assertFalse(GroupBeneficiary.objects.filter(
+            group__in=[group_a, group_b], benefit_plan=self.group_plan).exists())
+
+    def test_group_confirmation_records_the_group_of_each_record(self):
+        heads, groups = {}, []
+        for _ in range(3):
+            head, group, _ = create_group_with_individual(self.admin.username)
+            heads[head.id] = group
+            groups.append(group)
+        with patch.object(SocialProtectionConfig, 'enable_maker_checker_logic_enrollment', True):
+            on_confirm_enrollment_of_group(result={
+                'benefit_plan_id': str(self.group_plan.id), 'status': BeneficiaryStatus.POTENTIAL,
+                'user': self.admin,
+                'groups_not_assigned_to_selected_programme': Group.objects.filter(id__in=[g.id for g in groups]),
+            })
+        task = Task.objects.filter(business_event=SocialProtectionConfig.validation_group_enrollment,
+                                   json_ext__benefit_plan_id=str(self.group_plan.id)).latest('date_created')
+        sources = IndividualDataSource.objects.filter(upload_id=task.json_ext['data_upload_id'])
+        expected = {str(source.id): str(heads[source.individual_id].id) for source in sources}
+        self.assertEqual(len(expected), 3)
+        self.assertEqual(task.entity.json_ext['group_by_source'], expected)
+        self.assertNotIn('group_by_source', task.json_ext)
+
+    def test_confirmed_group_without_a_head_now_takes_the_confirmed_head_data(self):
+        head, group, membership = create_group_with_individual(
+            self.admin.username, individual_override={'json_ext': {'marker': 'confirmed head'}})
+        task = self._confirmed_task(self.group_plan, [head], SocialProtectionConfig.validation_group_enrollment,
+                                    groups=[group])
+        membership.delete(username=self.admin.username)
+        self._complete(task)
+        enrolment = GroupBeneficiary.objects.get(group=group, benefit_plan=self.group_plan, is_deleted=False)
+        self.assertEqual(enrolment.json_ext, head.json_ext)
+
+    def test_confirmed_group_deleted_since_is_logged_not_enrolled(self):
+        head, group, _ = create_group_with_individual(self.admin.username)
+        task = self._confirmed_task(self.group_plan, [head], SocialProtectionConfig.validation_group_enrollment,
+                                    groups=[group])
+        group.delete(username=self.admin.username)
+        with self.assertLogs('social_protection.signals.on_validation_import_valid_items', level='WARNING') as logs:
+            self._complete(task)
+        self.assertIn(str(group.id), '\n'.join(logs.output))
+        self.assertFalse(GroupBeneficiary.objects.filter(group=group, benefit_plan=self.group_plan).exists())
+
+    def test_task_without_recorded_groups_ignores_a_head_role_given_after_confirmation(self):
+        # At confirmation X heads A and is an ordinary member of B; then X becomes head of B instead.
+        head, group_a, _ = create_group_with_individual(self.admin.username)
+        _, group_b, _ = create_group_with_individual(self.admin.username)
+        membership_b = add_individual_to_group(self.admin.username, head, group_b, is_head=False)
+        task = self._confirmed_task(self.group_plan, [head], SocialProtectionConfig.validation_group_enrollment)
+        # A new head of A demotes X in place; X made head of B demotes B's head in place.
+        add_individual_to_group(self.admin.username, create_individual(self.admin.username), group_a)
+        membership_b.role = 'HEAD'
+        membership_b.save(username=self.admin.username)
+        with self.assertLogs('social_protection.signals.on_validation_import_valid_items', level='WARNING'):
+            self._complete(task)
+        self.assertFalse(GroupBeneficiary.objects.filter(
+            group__in=[group_a, group_b], benefit_plan=self.group_plan).exists())
+
 
 class EnrollmentFlowTaskCompletionTest(TestCase):
     """An enrolment task that followed an approval flow enrols only the records no step rejected."""
@@ -193,7 +306,7 @@ class EnrollmentFlowTaskCompletionTest(TestCase):
             steps.append(step)
         return flow, steps
 
-    def _flow_task(self, code, plan, individuals, business_event):
+    def _flow_task(self, code, plan, individuals, business_event, groups=None):
         flow, steps = self._two_step_flow(code)
         upload = IndividualDataSourceUpload(source_name='enr_flow', source_type='beneficiary import')
         upload.save(username=self.admin.username)
@@ -205,13 +318,16 @@ class EnrollmentFlowTaskCompletionTest(TestCase):
                                           validations={})
             source.save(username=self.admin.username)
             sources.append(source)
+        json_ext = {'data_upload_id': str(upload.id), 'benefit_plan_id': str(plan.id),
+                    'beneficiary_status': BeneficiaryStatus.POTENTIAL}
+        if groups is not None:
+            record.json_ext = {'group_by_source': {str(src.id): str(group.id) for src, group in zip(sources, groups)}}
+            record.save(username=self.admin.username)
         task = Task(
             source='import_valid_items', entity=record, status=Task.Status.ACCEPTED,
             executor_action_event=TasksManagementConfig.default_executor_event,
             business_event=business_event, business_status={}, data={},
-            flow=flow, current_step=steps[0], task_group=steps[0].task_group,
-            json_ext={'data_upload_id': str(upload.id), 'benefit_plan_id': str(plan.id),
-                      'beneficiary_status': BeneficiaryStatus.POTENTIAL},
+            flow=flow, current_step=steps[0], task_group=steps[0].task_group, json_ext=json_ext,
         )
         task.save(username=self.admin.username)
         return task, sources
@@ -244,7 +360,7 @@ class EnrollmentFlowTaskCompletionTest(TestCase):
             heads.append(head)
             groups.append(group)
         task, sources = self._flow_task('ENR_FLOW_G', self.group_plan, heads,
-                                        SocialProtectionConfig.validation_group_enrollment)
+                                        SocialProtectionConfig.validation_group_enrollment, groups=groups)
         self._run_flow(task, sources)
         enrolled = set(GroupBeneficiary.objects.filter(benefit_plan=self.group_plan, is_deleted=False)
                        .values_list('group_id', flat=True))
