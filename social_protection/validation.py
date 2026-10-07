@@ -77,6 +77,29 @@ def validate_benefit_plan(data, uuid=None):
         )
         validations.extend({"message": error} for error in criteria_errors)
 
+    if isinstance(json_ext, dict) and 'enrollment_rules' in json_ext:
+        from social_protection.enrollment_rules import validate_enrollment_rules
+        try:
+            validate_enrollment_rules(
+                json_ext['enrollment_rules'],
+                data.get('type', existing.type if existing else 'INDIVIDUAL'),
+            )
+        except ValidationError as exc:
+            validations.extend({"message": message} for message in exc.messages)
+    if isinstance(json_ext, dict) and 'upg_head_gender_options' in json_ext:
+        from types import SimpleNamespace
+        from social_protection.upg_options import upg_gender_options
+        try:
+            upg_gender_options(SimpleNamespace(json_ext=json_ext))
+        except ValidationError as exc:
+            validations.extend({"message": message} for message in exc.messages)
+    if isinstance(json_ext, dict) and 'upg_criteria' in json_ext:
+        from types import SimpleNamespace
+        from social_protection.upg_criteria import upg_criteria
+        try:
+            upg_criteria(SimpleNamespace(json_ext=json_ext))
+        except ValidationError as exc:
+            validations.extend({"message": message} for message in exc.messages)
     return validations
 
 

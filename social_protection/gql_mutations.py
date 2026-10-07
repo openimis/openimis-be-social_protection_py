@@ -46,7 +46,7 @@ def _submitted_criteria_config(data):
     if "json_ext" not in data:
         return False, None
     json_ext = _json_object(data.get("json_ext"))
-    criteria_keys = {"advanced_criteria", "enrolment_ranking"}
+    criteria_keys = {"advanced_criteria", "enrolment_ranking", "enrollment_rules", "upg_head_gender_options", "upg_criteria"}
     submitted_keys = criteria_keys.intersection(json_ext or {})
     if json_ext is None or not submitted_keys:
         return False, None
@@ -69,7 +69,7 @@ def check_criteria_perms(user, permission, data, current=None):
 def preserve_hidden_json_ext(user, data, current):
     """Merge criteria-only updates without erasing undisclosed extension data."""
     submitted = _json_object(data.get("json_ext"))
-    criteria_keys = {"advanced_criteria", "enrolment_ranking"}
+    criteria_keys = {"advanced_criteria", "enrolment_ranking", "enrollment_rules", "upg_head_gender_options", "upg_criteria"}
     submitted_keys = criteria_keys.intersection(submitted or {})
     if submitted is None or not submitted_keys or not current:
         return

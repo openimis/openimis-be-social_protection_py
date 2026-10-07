@@ -137,6 +137,13 @@ def advanced_criteria_validation_errors(
 
 
 def _validate_merged_defaults(benefit_plan_type, defaults, errors):
+    from social_protection.enrollment_rules import validate_enrollment_rules
+    extension = defaults.get("json_ext")
+    if isinstance(extension, dict) and "enrollment_rules" in extension:
+        try:
+            validate_enrollment_rules(extension["enrollment_rules"], benefit_plan_type)
+        except ValidationError as exc:
+            errors.extend(exc.messages)
     schema = defaults.get("beneficiary_data_schema")
     if schema is not None:
         if not isinstance(schema, dict):

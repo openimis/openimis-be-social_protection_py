@@ -57,7 +57,7 @@ class JsonExtMixin:
         return {
             key: value
             for key, value in json_ext.items()
-            if key not in {"advanced_criteria", "enrolment_ranking"}
+            if key not in {"advanced_criteria", "enrolment_ranking", "enrollment_rules", "upg_head_gender_options", "upg_criteria"}
         }
 
 
@@ -65,6 +65,21 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
     has_payment_plans = graphene.Boolean()
     advanced_criteria = graphene.JSONString()
+    upg_head_gender_options = graphene.List(graphene.String)
+    upg_criteria = graphene.JSONString()
+
+    def resolve_upg_criteria(self, info):
+        if not _have_permissions(info.context.user, SocialProtectionConfig.gql_benefit_plan_criteria_search_perms):
+            return None
+        from social_protection.upg_criteria import upg_criteria
+        return upg_criteria(self)
+
+    def resolve_upg_head_gender_options(self, info):
+        if not _have_permissions(info.context.user, SocialProtectionConfig.gql_benefit_plan_criteria_search_perms):
+            return None
+        from social_protection.upg_options import upg_gender_options
+        return upg_gender_options(self)
+    enrollment_rules = graphene.JSONString()
     enrolment_ranking = graphene.JSONString()
 
     class Meta:
@@ -115,6 +130,18 @@ class BenefitPlanGQLType(DjangoObjectType, JsonExtMixin):
                 return json_ext.get("advanced_criteria", {})
             return {}
         return None
+
+    def resolve_enrollment_rules(self, info):
+        perms = SocialProtectionConfig.gql_benefit_plan_criteria_search_perms
+        if not _have_permissions(info.context.user, perms):
+            return None
+        config = self.json_ext or {}
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except (TypeError, ValueError):
+                return {}
+        return config.get("enrollment_rules", {}) if isinstance(config, dict) else {}
 
     def resolve_enrolment_ranking(self, info):
         perms = SocialProtectionConfig.gql_benefit_plan_criteria_search_perms

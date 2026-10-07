@@ -33,6 +33,25 @@ class BenefitPlan(core_models.HistoryBusinessModel):
     )
     description = models.CharField(max_length=1024, null=True, blank=True)
 
+    def clean(self):
+        super().clean()
+        import json
+        from social_protection.enrollment_rules import validate_enrollment_rules
+        config = self.json_ext or {}
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except ValueError as exc:
+                raise ValidationError({"json_ext": "Must be valid JSON."}) from exc
+        if not isinstance(config, dict):
+            raise ValidationError({"json_ext": "Must be an object."})
+        from social_protection.upg_options import upg_gender_options
+        upg_gender_options(self)
+        from social_protection.upg_criteria import upg_criteria
+        upg_criteria(self)
+        if "enrollment_rules" in config:
+            validate_enrollment_rules(config["enrollment_rules"], self.type)
+
     def __str__(self):
         return f'Benefit Plan {self.code}'
 

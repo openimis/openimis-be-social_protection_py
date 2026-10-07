@@ -13,6 +13,38 @@ from social_protection.gql_queries import BenefitPlanGQLType
 
 
 class BenefitPlanCriteriaPermissionTest(SimpleTestCase):
+    def test_enrollment_rules_resolver_respects_permission(self):
+        user = Mock(id=1)
+        info = SimpleNamespace(context=SimpleNamespace(user=user))
+        plan = SimpleNamespace(json_ext={"enrollment_rules": {"ACTIVE": []}})
+        user.has_perms.return_value = False
+        self.assertIsNone(BenefitPlanGQLType.resolve_enrollment_rules(plan, info))
+        user.has_perms.return_value = True
+        self.assertEqual(BenefitPlanGQLType.resolve_enrollment_rules(plan, info), {"ACTIVE": []})
+        plan.json_ext = '{"enrollment_rules": {"ACTIVE": []}}'
+        self.assertEqual(BenefitPlanGQLType.resolve_enrollment_rules(plan, info), {"ACTIVE": []})
+
+    def test_enrollment_rules_require_criteria_permission(self):
+        user = Mock()
+        user.has_perms.return_value = False
+        current = SimpleNamespace(json_ext={"enrollment_rules": {"ACTIVE": []}})
+        with self.assertRaisesMessage(ValidationError, "lack_of_criteria_perms"):
+            check_criteria_perms(
+                user, ["171006"],
+                {"json_ext": {"enrollment_rules": {}}}, current,
+            )
+
+    def test_legacy_criteria_edit_preserves_enrollment_rules(self):
+        user = Mock()
+        user.has_perms.return_value = False
+        rules = {"ACTIVE": [{"scope": "member", "conditions": [
+            {"field": "age", "min": 18, "max": 64},
+        ]}]}
+        current = SimpleNamespace(json_ext={"enrollment_rules": rules})
+        data = {"json_ext": {"advanced_criteria": {"ACTIVE": []}}}
+        preserve_hidden_json_ext(user, data, current)
+        self.assertEqual(data["json_ext"]["enrollment_rules"], rules)
+
     def test_criteria_only_update_preserves_hidden_json_ext(self):
         user = Mock()
         user.has_perms.return_value = False
