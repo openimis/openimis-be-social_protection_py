@@ -3,6 +3,7 @@ import uuid
 import random
 import string
 from django.contrib.postgres.aggregates import ArrayAgg
+from django.db import transaction
 from django.db.models import F
 from django.core.exceptions import ValidationError
 from typing import List
@@ -369,53 +370,111 @@ def on_task_complete_action(business_event, **kwargs):
                 accepted_ids,
             ).run_workflow()
         elif business_event == SocialProtectionConfig.validation_enrollment:
-            individuals_to_enroll = Individual.objects.filter(
-                individualdatasource__upload_id=data['task']['json_ext']['data_upload_id']
-            )
+            benefit_plan_id = data['task']['json_ext']['benefit_plan_id']
+            upload_id = data['task']['json_ext']['data_upload_id']
             user = User.objects.get(id=data['user']['id'])
-            new_beneficiaries = []
-            for individual in individuals_to_enroll:
-                beneficiary = Beneficiary(
-                    individual=individual,
-                    benefit_plan_id=data['task']['json_ext']['benefit_plan_id'],
-                    status=data['task']['json_ext']['beneficiary_status'],
-                    json_ext=individual.json_ext,
-                    user_created=user,
-                    user_updated=user,
-                    uuid=uuid.uuid4(),
-                )
-                new_beneficiaries.append(beneficiary)
-            try:
-                Beneficiary.objects.bulk_create(new_beneficiaries)
-                BeneficiaryImportService(user).synchronize_data_for_reporting(
-                    upload_id=data['task']['json_ext']['data_upload_id'],
-                    benefit_plan=data['task']['json_ext']['benefit_plan_id']
-                )
-            except ValidationError as e:
-                logger.error(f"Validation error occurred: {e}")
+            with transaction.atomic():
+                # Approvals of the same plan wait for each other, so each one sees
+                # the enrolments the previous one created.
+                BenefitPlan.objects.select_for_update(no_key=True).filter(id=benefit_plan_id).first()
+                # The upload is frozen at confirmation; individuals enrolled since then
+                # (e.g. by another enrolment task approved first) are skipped.
+                in_upload = Individual.objects.filter(individualdatasource__upload_id=upload_id).distinct()
+                already_enrolled = Beneficiary.objects.filter(
+                    benefit_plan_id=benefit_plan_id, is_deleted=False, individual__in=in_upload,
+                ).values('individual_id')
+                individuals_to_enroll = in_upload.exclude(id__in=already_enrolled)
+                new_beneficiaries = [
+                    Beneficiary(
+                        individual=individual,
+                        benefit_plan_id=benefit_plan_id,
+                        status=data['task']['json_ext']['beneficiary_status'],
+                        json_ext=individual.json_ext,
+                        user_created=user,
+                        user_updated=user,
+                        uuid=uuid.uuid4(),
+                    )
+                    for individual in individuals_to_enroll
+                ]
+                skipped = in_upload.count() - len(new_beneficiaries)
+                if skipped:
+                    logger.info("Enrolment upload %s: %s individual(s) already enrolled in plan %s, skipped",
+                                upload_id, skipped, benefit_plan_id)
+                try:
+                    Beneficiary.objects.bulk_create(new_beneficiaries)
+                    BeneficiaryImportService(user).synchronize_data_for_reporting(
+                        upload_id=upload_id,
+                        benefit_plan=benefit_plan_id
+                    )
+                except ValidationError as e:
+                    logger.error(f"Validation error occurred: {e}")
             return
         elif business_event == SocialProtectionConfig.validation_group_enrollment:
-            head_groups_to_enroll = Individual.objects.filter(
-                individualdatasource__upload_id=data['task']['json_ext']['data_upload_id']
-            )
+            benefit_plan_id = data['task']['json_ext']['benefit_plan_id']
+            upload_id = data['task']['json_ext']['data_upload_id']
             user = User.objects.get(id=data['user']['id'])
-            new_group_beneficiaries = []
-            for head_individual in head_groups_to_enroll:
-                group_individual_head = GroupIndividual.objects.filter(individual=head_individual).first()
-                group_beneficiary = GroupBeneficiary(
-                    group=group_individual_head.group,
-                    benefit_plan_id=data['task']['json_ext']['benefit_plan_id'],
-                    status=data['task']['json_ext']['beneficiary_status'],
-                    json_ext=head_individual.json_ext,
-                    user_created=user,
-                    user_updated=user,
-                    uuid=uuid.uuid4(),
-                )
-                new_group_beneficiaries.append(group_beneficiary)
-            try:
-                GroupBeneficiary.objects.bulk_create(new_group_beneficiaries)
-            except ValidationError as e:
-                logger.error(f"Validation error occurred: {e}")
+            with transaction.atomic():
+                # Approvals of the same plan wait for each other, so each one sees
+                # the enrolments the previous one created.
+                BenefitPlan.objects.select_for_update(no_key=True).filter(id=benefit_plan_id).first()
+                # The upload holds the heads of the groups selected at confirmation. Each one's
+                # group is its active HEAD membership; if the head was replaced since (the old
+                # head keeps an active membership without role), its only active membership.
+                # Memberships created after the confirmation cannot be the selected group.
+                confirmed_at = IndividualDataSourceUpload.objects.get(id=upload_id).date_created
+                upload_individuals = Individual.objects.filter(
+                    individualdatasource__upload_id=upload_id).distinct()
+                memberships = {}
+                for membership in GroupIndividual.objects.filter(
+                    individual__in=upload_individuals, is_deleted=False, date_created__lte=confirmed_at,
+                ).select_related('group', 'individual'):
+                    memberships.setdefault(membership.individual_id, []).append(membership)
+                groups = {}
+                unresolved = []
+                for individual in upload_individuals:
+                    active = memberships.get(individual.id, [])
+                    heads = [m for m in active if m.role == GroupIndividual.Role.HEAD]
+                    chosen = heads if heads else active
+                    if len(chosen) != 1:
+                        unresolved.append(str(individual.id))
+                        continue
+                    groups.setdefault(chosen[0].group_id, chosen[0])
+                if unresolved:
+                    logger.warning(
+                        "Group enrolment upload %s: no single group for %s individual(s), not enrolled: %s%s",
+                        upload_id, len(unresolved), ', '.join(unresolved[:20]),
+                        ' (first 20)' if len(unresolved) > 20 else '')
+                enrolled_group_ids = set(GroupBeneficiary.objects.filter(
+                    benefit_plan_id=benefit_plan_id,
+                    is_deleted=False,
+                    group_id__in=groups.keys(),
+                ).values_list('group_id', flat=True))
+                # The group's data comes from its current head, as on direct enrolment.
+                current_heads = {
+                    head.group_id: head.individual for head in GroupIndividual.objects.filter(
+                        group_id__in=groups.keys(), role=GroupIndividual.Role.HEAD, is_deleted=False,
+                    ).select_related('individual')
+                }
+                new_group_beneficiaries = [
+                    GroupBeneficiary(
+                        group=membership.group,
+                        benefit_plan_id=benefit_plan_id,
+                        status=data['task']['json_ext']['beneficiary_status'],
+                        json_ext=current_heads.get(group_id, membership.individual).json_ext,
+                        user_created=user,
+                        user_updated=user,
+                        uuid=uuid.uuid4(),
+                    )
+                    for group_id, membership in groups.items()
+                    if group_id not in enrolled_group_ids
+                ]
+                if enrolled_group_ids:
+                    logger.info("Group enrolment upload %s: %s group(s) already enrolled in plan %s, skipped",
+                                upload_id, len(enrolled_group_ids), benefit_plan_id)
+                try:
+                    GroupBeneficiary.objects.bulk_create(new_group_beneficiaries)
+                except ValidationError as e:
+                    logger.error(f"Validation error occurred: {e}")
             return
         elif business_event == SocialProtectionConfig.validation_import_group_valid_items:
             BaseGroupColumnAggregationClass.group_data_sources_into_entities(
