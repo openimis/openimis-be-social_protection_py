@@ -159,7 +159,7 @@ msgstr ""
 
 #: social_protection/validation.py:81
 msgid "social_protection.validation.field_empty"
-msgstr "%(field) can't be empty"
+msgstr "%(field)s can't be empty"
 
 #: social_protection/views.py:44
 msgid "Invalid file type. Allowed: .csv, .xls, .xlsx"
