@@ -755,8 +755,10 @@ class BeneficiaryImportService:
             )
 
         if data_sources_to_update:
+            # Batched: one UPDATE ... CASE over every row grows much faster than the
+            # row count, and never finished for 100,000 rows.
             IndividualDataSource.objects.bulk_update(
-                data_sources_to_update, ['validations']
+                data_sources_to_update, ['validations'], batch_size=1000
             )
 
     def _synchronize_individual(self, upload_id):
