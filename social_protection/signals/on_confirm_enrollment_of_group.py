@@ -38,12 +38,6 @@ def on_confirm_enrollment_of_group(**kwargs):
             source_type='beneficiary group import'
         )
         upload.save(username=user.login_name)
-        upload_record = BenefitPlanDataUploadRecords(
-            data_upload=upload,
-            benefit_plan_id=benefit_plan_id,
-            workflow="Enrollment"
-        )
-        upload_record.save(username=user.username)
 
         group_individuals = GroupIndividual.objects.filter(
             is_deleted=False,
@@ -51,6 +45,9 @@ def on_confirm_enrollment_of_group(**kwargs):
             role=GroupIndividual.Role.HEAD
         ).distinct()
         data_source_objects = []
+        # Completion enrols the group each record was confirmed for; a head's memberships
+        # may change before the task is approved.
+        group_by_source = {}
         for group_individual in group_individuals:
             source = IndividualDataSource(
                 upload=upload,
@@ -62,6 +59,14 @@ def on_confirm_enrollment_of_group(**kwargs):
                 uuid=uuid.uuid4(),
             )
             data_source_objects.append(source)
+            group_by_source[str(source.id)] = str(group_individual.group_id)
+        upload_record = BenefitPlanDataUploadRecords(
+            data_upload=upload,
+            benefit_plan_id=benefit_plan_id,
+            workflow="Enrollment",
+            json_ext={'group_by_source': group_by_source},
+        )
+        upload_record.save(username=user.username)
         IndividualDataSource.objects.bulk_create(data_source_objects)
         json_ext = {
             'source_name': upload_record.data_upload.source_name,
