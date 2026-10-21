@@ -25,6 +25,7 @@ from social_protection.models import (
     BeneficiaryProjectEnrollment,
     GroupBeneficiaryProjectEnrollment,
 )
+from core.gql import ScopedQuerysetMixin
 
 
 def _have_permissions(user, permission):
@@ -255,7 +256,7 @@ class BeneficiaryFilter(
         )
 
 
-class BeneficiaryProjectEnrollmentGQLType(DjangoObjectType):
+class BeneficiaryProjectEnrollmentGQLType(ScopedQuerysetMixin, DjangoObjectType):
     uuid = graphene.String(source='uuid')
     time_entries = graphene.List(BeneficiaryProjectTimeEntryGQLType)
 
@@ -360,7 +361,7 @@ class GroupBeneficiaryFilter(
         )
 
 
-class GroupBeneficiaryProjectEnrollmentGQLType(DjangoObjectType):
+class GroupBeneficiaryProjectEnrollmentGQLType(ScopedQuerysetMixin, DjangoObjectType):
     uuid = graphene.String(source='uuid')
     time_entries = graphene.List(GroupBeneficiaryProjectTimeEntryGQLType)
 
@@ -524,7 +525,7 @@ class ProjectFilter(django_filters.FilterSet):
         }
 
 
-class ProjectGQLType(DjangoObjectType, JsonExtMixin):
+class ProjectGQLType(ScopedQuerysetMixin, DjangoObjectType, JsonExtMixin):
     uuid = graphene.String(source='uuid')
 
     class Meta:
