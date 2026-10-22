@@ -2,7 +2,9 @@ import logging
 import re
 
 from collections import namedtuple
+from django.core.exceptions import ValidationError
 from django.db.models.query import QuerySet
+from django.utils.translation import gettext as _
 from typing import List
 
 from core.custom_filters import CustomFilterWizardInterface
@@ -68,12 +70,21 @@ class BenefitPlanCustomFilterWizard(CustomFilterWizardInterface):
         """
         for filter_part in custom_filters:
             if isinstance(filter_part, dict):
-                value_type = filter_part['type']
-                value = filter_part['value']
-                field = filter_part['field'] + '__' + filter_part['filter']
+                value_type = filter_part.get('type')
+                value = filter_part.get('value')
+                field_name, filter_name = filter_part.get('field'), filter_part.get('filter')
+                complete = field_name and filter_name and value_type
+                field = f"{field_name}__{filter_name}"
             else:
-                field, value = filter_part.split('=')
-                field, value_type = field.rsplit('__', 1)
+                path, separator, value = filter_part.partition('=')
+                field, __, value_type = path.rpartition('__')
+                field_name, __, filter_name = field.rpartition('__')
+                complete = separator and field_name.strip('_') and filter_name and value_type
+            if not complete:
+                # an empty criteria row ("____=" or a dict of empty strings) filtered on
+                # json_ext____ and matched nothing (OP-3251)
+                raise ValidationError(
+                    _("Incomplete custom filter condition: %(condition)s") % {"condition": filter_part})
             value = self.__cast_value(value, value_type)
             filter_kwargs = {f"{relation}__json_ext__{field}" if relation else f"json_ext__{field}": value}
             query = query.filter(**filter_kwargs).distinct()

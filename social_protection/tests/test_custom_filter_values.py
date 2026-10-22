@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from core.test_helpers import create_test_interactive_user
@@ -59,3 +60,18 @@ class BenefitPlanCustomFilterStringValueTest(TestCase):
             with self.subTest(filter=filter_name):
                 criterion = {'field': 'source', 'filter': filter_name, 'type': 'string', 'value': value}
                 self.assertEqual(self._filter(criterion), [self.match.id])
+
+    def test_incomplete_criterion_is_refused(self):
+        # OP-3251: an empty criteria row is stored as a dict of empty strings, or sent
+        # as "____=", and was applied as a filter on json_ext____, which matches nothing.
+        for criterion in (
+            '____=',
+            'source__iexact__=UAT',
+            'source__string=UAT',
+            {'field': '', 'filter': '', 'type': '', 'value': ''},
+            {'field': 'source', 'filter': '', 'type': 'string', 'value': 'UAT'},
+            {'field': '', 'filter': 'iexact', 'type': 'string', 'value': 'UAT'},
+        ):
+            with self.subTest(criterion=criterion):
+                with self.assertRaises(ValidationError):
+                    self._filter(criterion)
