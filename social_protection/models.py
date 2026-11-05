@@ -236,7 +236,8 @@ class Beneficiary(core_models.HistoryBusinessModel):
         return f'{self.individual.first_name} {self.individual.last_name}'
 
     @classmethod
-    def get_queryset(cls, queryset, user):
+    def get_queryset(cls, queryset, user, *, validity=None, audits=None):
+        queryset = cls.apply_row_filters(queryset, validity, audits)
         if queryset is None:
             queryset = cls.objects.all()
 
@@ -377,7 +378,8 @@ class GroupBeneficiary(core_models.HistoryBusinessModel):
         super().clean()
 
     @classmethod
-    def get_queryset(cls, queryset, user):
+    def get_queryset(cls, queryset, user, *, validity=None, audits=None):
+        queryset = cls.apply_row_filters(queryset, validity, audits)
         if queryset is None:
             queryset = cls.objects.all()
 
