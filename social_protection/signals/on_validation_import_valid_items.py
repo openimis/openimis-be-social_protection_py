@@ -621,7 +621,7 @@ def on_task_resolve(**kwargs):
     try:
         result = kwargs.get('result', None)
         if result and result['success'] \
-                and result['data']['task']['status'] == Task.Status.ACCEPTED \
+                and result['data']['task']['status'] in Task.OPEN_FOR_RESOLUTION \
                 and result['data']['task']['executor_action_event'] == TasksManagementConfig.default_executor_event \
                 and result['data']['task']['business_event'] in [
                     SocialProtectionConfig.validation_import_valid_items,
