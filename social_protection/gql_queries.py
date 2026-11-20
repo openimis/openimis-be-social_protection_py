@@ -25,7 +25,7 @@ from social_protection.models import (
     BeneficiaryProjectEnrollment,
     GroupBeneficiaryProjectEnrollment,
 )
-from core.gql import ScopedQuerysetMixin
+from core.gql import HistoryTypeEnum, ScopedQuerysetMixin
 
 
 def _have_permissions(user, permission):
@@ -447,6 +447,8 @@ class BenefitPlanHistoryGQLType(DjangoObjectType, JsonExtMixin):
     def resolve_user_updated(self, info):
         return self.user_updated
 
+    history_type = graphene.Field(HistoryTypeEnum, required=True)
+
     class Meta:
         model = BenefitPlan.history.model
         interfaces = (graphene.relay.Node,)
@@ -540,6 +542,8 @@ class ProjectHistoryGQLType(DjangoObjectType):
 
     def resolve_user_updated(self, info):
         return self.user_updated
+
+    history_type = graphene.Field(HistoryTypeEnum, required=True)
 
     class Meta:
         model = Project.history.model
